@@ -5,8 +5,8 @@ services:
       RABBITMQ_DEFAULT_USER: ${RABBIT_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBIT_PASS}
     ports:
-      - "5672:5672"     # AMQP (for nameko shell)
-      - "15672:15672"   # UI admin (batasi via security group)
+      - "5672:5672"
+      - "15672:15672"
     restart: unless-stopped
 
   db:
@@ -30,7 +30,7 @@ services:
       DB_USER: ${DB_USER}
       DB_PASS: ${DB_PASS}
       DB_NAME: ${DB_NAME}
-    command: sh -c "sleep 10 && python create_tables.py && nameko run --config config.yaml penawaran_kelas.service"
+    command: sh -c "sleep 10 && python write_config.py && python create_tables.py && nameko run --config runtime_config.yaml penawaran_kelas.service"
     restart: unless-stopped
 
   gateway:
@@ -43,7 +43,7 @@ services:
       RABBIT_USER: ${RABBIT_USER}
       RABBIT_PASS: ${RABBIT_PASS}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
-    command: sh -c "sleep 15 && nameko run --config config.yaml gateway"
+    command: sh -c "sleep 15 && python write_config.py && nameko run --config runtime_config.yaml gateway"
     restart: unless-stopped
 
 volumes:
