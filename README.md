@@ -6,27 +6,8 @@ Dibangun menggunakan **Nameko** (RPC over RabbitMQ) dengan **HTTP Gateway** di p
 
 ---
 
-## Deployment
-
-Service sudah berjalan di EC2 dan dapat diakses langsung:
-
-| Keterangan | Nilai |
-|------------|-------|
-| **Base URL** | `http://3.87.214.79:8000` |
-| **RabbitMQ Management UI** | `http://3.87.214.79:15672` |
-| **Provider** | AWS EC2 |
-
-Semua endpoint di dokumentasi ini menggunakan base URL tersebut.
-
-Contoh: `POST http://3.87.214.79:8000/penawaran/ruang`
-
----
-
 ## Daftar Isi
 
-- [Deployment](#deployment)
-- [Arsitektur](#arsitektur)
-- [Tech Stack](#tech-stack)
 - [Ketergantungan ke Master Service](#ketergantungan-ke-master-service)
 - [Menjalankan dengan Docker](#menjalankan-dengan-docker)
 - [Environment Variables](#environment-variables)
@@ -39,44 +20,6 @@ Contoh: `POST http://3.87.214.79:8000/penawaran/ruang`
 - [Integrasi via RPC (Antar Service)](#integrasi-via-rpc-antar-service)
 - [Model Data](#model-data)
 - [Format Error](#format-error)
-
----
-
-## Arsitektur
-
-```
-[HTTP Client / Postman / Frontend]
-             │
-             ▼  port 8000
-    [penawaran_gateway]
-             │  RPC via RabbitMQ
-             ▼
-    [penawaran_kelas]  ──── RPC ────▶  [master_service]
-             │
-             ▼
-        [PostgreSQL]
-```
-
-- **Nama RPC service:** `penawaran_kelas`
-- **Nama gateway service:** `penawaran_gateway`
-- **Port HTTP:** `8000`
-
-Semua komunikasi antar service menggunakan RabbitMQ sebagai message broker (protokol AMQP). Client eksternal (Postman, frontend, service lain via HTTP) mengakses lewat gateway. Service lain yang menggunakan Nameko dapat memanggil langsung via RPC tanpa melewati gateway.
-
----
-
-## Tech Stack
-
-| Komponen | Versi |
-|----------|-------|
-| Python | 3.11 |
-| Nameko | 2.14.1 |
-| nameko-sqlalchemy | 1.5.0 |
-| SQLAlchemy | < 2.0 |
-| PostgreSQL driver | pg8000 |
-| RabbitMQ | 3 (management) |
-| PostgreSQL | 15 |
-| PyJWT | 2.8.0 |
 
 ---
 
@@ -273,9 +216,9 @@ Menambahkan ruang baru ke dalam sistem. `kode_ruang` harus unik. Ruang yang baru
 
 Mengambil seluruh data ruang. Dapat difilter berdasarkan tipe atau status. Berguna untuk menampilkan pilihan ruang saat membuat jadwal.
 
-**Query parameter (opsional):** `tipe`, `status`
+**Query parameter (opsional):** `tipe`, `status`, `gedung`
 
-Contoh: `GET /penawaran/ruang?tipe=kelas&status=tersedia`
+Contoh: `GET /penawaran/ruang?tipe=kelas&status=tersedia&gedung=Gedung P`
 
 **Respons `200`:**
 ```json

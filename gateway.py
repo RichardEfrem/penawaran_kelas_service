@@ -59,7 +59,8 @@ class GatewayService:
 
         tipe   = request.args.get('tipe')
         status = request.args.get('status')
-        result = self.penawaran_kelas.list_ruang(tipe=tipe, status=status)
+        gedung = request.args.get('gedung')
+        result = self.penawaran_kelas.list_ruang(tipe=tipe, status=status, gedung=gedung)
         return self._ok(result)
 
     @http('GET', '/penawaran/ruang/<int:ruang_id>')

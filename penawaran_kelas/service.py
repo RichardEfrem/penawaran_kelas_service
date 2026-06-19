@@ -157,12 +157,14 @@ class PenawaranKelasService:
         }
 
     @rpc
-    def list_ruang(self, tipe=None, status=None):
+    def list_ruang(self, tipe=None, status=None, gedung=None):
         q = self.db.query(Ruang)
         if tipe:
             q = q.filter_by(tipe=tipe)
         if status:
             q = q.filter_by(status=status)
+        if gedung:
+            q = q.filter_by(gedung=gedung)
         rows = q.all()
         return [
             {
