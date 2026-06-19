@@ -1,53 +1,74 @@
 # Penawaran Kelas Service
 
-Microservice for managing class offerings (kelas), rooms (ruang), lecturer assignments, and schedules (jadwal) in the SOA Final Project system.
+Microservice untuk mengelola penawaran kelas, ruang, penugasan dosen, dan jadwal dalam sistem SOA Final Project.
 
-Built with **Nameko** (RPC over RabbitMQ) + **HTTP Gateway** (port 8000).
+Dibangun menggunakan **Nameko** (RPC over RabbitMQ) dengan **HTTP Gateway** di port **8000**.
 
 ---
 
-## Table of Contents
+## Deployment
 
-- [Architecture](#architecture)
+Service sudah berjalan di EC2 dan dapat diakses langsung:
+
+| Keterangan | Nilai |
+|------------|-------|
+| **Base URL** | `http://3.87.214.79:8000` |
+| **RabbitMQ Management UI** | `http://3.87.214.79:15672` |
+| **Provider** | AWS EC2 |
+
+Semua endpoint di dokumentasi ini menggunakan base URL tersebut.
+
+Contoh: `POST http://3.87.214.79:8000/penawaran/ruang`
+
+---
+
+## Daftar Isi
+
+- [Deployment](#deployment)
+- [Arsitektur](#arsitektur)
 - [Tech Stack](#tech-stack)
-- [Dependencies on Master Service](#dependencies-on-master-service)
-- [Running with Docker](#running-with-docker)
+- [Ketergantungan ke Master Service](#ketergantungan-ke-master-service)
+- [Menjalankan dengan Docker](#menjalankan-dengan-docker)
 - [Environment Variables](#environment-variables)
-- [Authentication](#authentication)
-- [HTTP API Reference](#http-api-reference)
-  - [Ruang (Room)](#ruang-room)
-  - [Kelas (Class)](#kelas-class)
+- [Autentikasi (JWT)](#autentikasi-jwt)
+- [Referensi HTTP API](#referensi-http-api)
+  - [Ruang](#ruang)
+  - [Kelas](#kelas)
   - [Dosen per Kelas](#dosen-per-kelas)
-  - [Jadwal (Schedule)](#jadwal-schedule)
-- [RPC Interface](#rpc-interface)
-- [Data Models](#data-models)
-- [Error Responses](#error-responses)
+  - [Jadwal](#jadwal)
+- [Integrasi via RPC (Antar Service)](#integrasi-via-rpc-antar-service)
+- [Model Data](#model-data)
+- [Format Error](#format-error)
 
 ---
 
-## Architecture
+## Arsitektur
 
 ```
-[HTTP Client / Postman]
-        │
-        ▼ :8000
-[penawaran_gateway]  ──RPC──▶  [penawaran_kelas]  ──RPC──▶  [master_service]
-                                       │
-                                       ▼
-                                  [PostgreSQL]
-        All services communicate via RabbitMQ (AMQP)
+[HTTP Client / Postman / Frontend]
+             │
+             ▼  port 8000
+    [penawaran_gateway]
+             │  RPC via RabbitMQ
+             ▼
+    [penawaran_kelas]  ──── RPC ────▶  [master_service]
+             │
+             ▼
+        [PostgreSQL]
 ```
 
-- **RPC service name:** `penawaran_kelas`
-- **Gateway service name:** `penawaran_gateway`
-- **HTTP port:** `8000`
+- **Nama RPC service:** `penawaran_kelas`
+- **Nama gateway service:** `penawaran_gateway`
+- **Port HTTP:** `8000`
+
+Semua komunikasi antar service menggunakan RabbitMQ sebagai message broker (protokol AMQP). Client eksternal (Postman, frontend, service lain via HTTP) mengakses lewat gateway. Service lain yang menggunakan Nameko dapat memanggil langsung via RPC tanpa melewati gateway.
 
 ---
 
 ## Tech Stack
 
-| Component | Version |
-|-----------|---------|
+| Komponen | Versi |
+|----------|-------|
 | Python | 3.11 |
 | Nameko | 2.14.1 |
 | nameko-sqlalchemy | 1.5.0 |
@@ -59,77 +80,31 @@ Built with **Nameko** (RPC over RabbitMQ) + **HTTP Gateway** (port 8000).
 
 ---
 
-## Dependencies on Master Service
+## Ketergantungan ke Master Service
 
-Two endpoints internally call `master_service` via RPC to validate foreign keys:
+Service ini memanggil `master_service` via RPC untuk memvalidasi data pada dua endpoint:
 
-| Endpoint | Master RPC called | What it validates |
-|----------|-------------------|-------------------|
-| `POST /penawaran/kelas` | `get_course_by_id`, `get_semester_by_id`, `get_unit_by_id` | course, semester, unit must exist |
-| `POST /penawaran/kelas/<id>/dosen` | `get_lecturer_by_id` | lecturer must exist |
+| Endpoint | RPC yang dipanggil | Yang divalidasi |
+|----------|--------------------|-----------------|
+| `POST /penawaran/kelas` | `get_course_by_id`, `get_semester_by_id`, `get_unit_by_id` | course, semester, dan unit harus ada di master |
+| `POST /penawaran/kelas/<id>/dosen` | `get_lecturer_by_id` | dosen harus terdaftar di master |
 
-> If `master_service` is not running, these two endpoints will **timeout**. All other endpoints work independently.
+> Jika `master_service` sedang tidak berjalan, kedua endpoint di atas akan **timeout**. Semua endpoint lainnya berjalan secara independen.
 
 ---
 
-## Running with Docker
+## Menjalankan dengan Docker
 
-**Prerequisites:** Docker + Docker Compose installed on the host.
+**Prasyarat:** Docker dan Docker Compose sudah terinstall.
 
-### 1. Clone the repository
+### 1. Clone repository
 
 ```bash
 git clone <repo-url>
 cd penawaran_kelas
 ```
 
-### 2. Create `.env` file
-
-```bash
-cp .env.example .env
-# then edit .env with your values
-```
-
-### 3. Start all services
-
-```bash
-docker compose up -d --build
-```
-
-### 4. Verify containers are running
-
-```bash
-docker compose ps
-```
-
-All four containers should show `Up`:
-
-| Container | Role |
-|-----------|------|
-| `rabbitmq` | Message broker (AMQP) |
-| `db` | PostgreSQL database |
-| `penawaran_kelas` | Nameko RPC service |
-| `gateway` | HTTP gateway on port 8000 |
-
-### 5. View logs
-
-```bash
-docker compose logs -f gateway
-docker compose logs -f penawaran_kelas
-```
-
-### Stopping
-
-```bash
-docker compose down          # stop containers, keep DB volume
-docker compose down -v       # stop containers AND delete DB data
-```
-
----
-
-## Environment Variables
-
-Create a `.env` file in the project root (never commit this file):
+### 2. Buat file `.env`
 
 ```env
 RABBIT_USER=appuser
@@ -140,29 +115,70 @@ DB_NAME=penawaran_kelas
 JWT_SECRET_KEY=abl_soa_finalProject
 ```
 
-| Variable | Description |
-|----------|-------------|
-| `RABBIT_USER` | RabbitMQ username |
-| `RABBIT_PASS` | RabbitMQ password |
-| `DB_USER` | PostgreSQL username |
-| `DB_PASS` | PostgreSQL password |
-| `DB_NAME` | PostgreSQL database name |
-| `JWT_SECRET_KEY` | Shared JWT secret (must match master service) |
+> Jangan pernah commit file `.env` ke repository.
 
-> `RABBIT_HOST` and `DB_HOST` are set automatically by Docker Compose (container service names).
+### 3. Jalankan semua container
+
+```bash
+docker compose up -d --build
+```
+
+### 4. Verifikasi container berjalan
+
+```bash
+docker compose ps
+```
+
+Keempat container harus berstatus `Up`:
+
+| Container | Fungsi |
+|-----------|--------|
+| `rabbitmq` | Message broker (AMQP) |
+| `db` | Database PostgreSQL |
+| `penawaran_kelas` | Nameko RPC service |
+| `gateway` | HTTP gateway port 8000 |
+
+### 5. Lihat log
+
+```bash
+docker compose logs -f gateway
+docker compose logs -f penawaran_kelas
+```
+
+### Menghentikan service
+
+```bash
+docker compose down       # hentikan container, data DB tetap ada
+docker compose down -v    # hentikan container + hapus data DB
+```
 
 ---
 
-## Authentication
+## Environment Variables
 
-Every HTTP endpoint requires a JWT token issued by the master service login.
+| Variable | Keterangan |
+|----------|------------|
+| `RABBIT_USER` | Username RabbitMQ |
+| `RABBIT_PASS` | Password RabbitMQ |
+| `DB_USER` | Username PostgreSQL |
+| `DB_PASS` | Password PostgreSQL |
+| `DB_NAME` | Nama database PostgreSQL |
+| `JWT_SECRET_KEY` | Secret key JWT (harus sama dengan master service) |
 
-**Header format:**
+> `RABBIT_HOST` dan `DB_HOST` di-set otomatis oleh Docker Compose menggunakan nama service container.
+
+---
+
+## Autentikasi (JWT)
+
+Semua endpoint HTTP membutuhkan token JWT yang valid. Token diperoleh dari endpoint login milik master service.
+
+**Format header:**
 ```
 Authorization: Bearer <token>
 ```
 
-**Token payload structure:**
+**Struktur payload token:**
 ```json
 {
   "user_id": 1,
@@ -172,7 +188,7 @@ Authorization: Bearer <token>
 }
 ```
 
-**Generating a test token** (when master service is not available):
+**Membuat token untuk testing** (jika master service belum tersedia):
 
 ```bash
 source venv/bin/activate
@@ -192,32 +208,35 @@ print(token)
 "
 ```
 
-**Auth error responses:**
+**Respons error autentikasi:**
 
-| Status | Message |
-|--------|---------|
-| 401 | `Tiket tidak ditemukan! Silakan login.` — header missing |
-| 401 | `Format token tidak valid.` — not Bearer format |
-| 401 | `Tiket sudah kadaluwarsa, login lagi.` — token expired |
-| 401 | `Tiket palsu!` — invalid signature |
-
----
-
-## HTTP API Reference
-
-Base URL: `http://<host>:8000`
-
-All requests require `Authorization: Bearer <token>` header.  
-All responses are `Content-Type: application/json`.
+| Status | Pesan | Penyebab |
+|--------|-------|----------|
+| 401 | `Tiket tidak ditemukan! Silakan login.` | Header Authorization tidak dikirim |
+| 401 | `Format token tidak valid.` | Format bukan `Bearer <token>` |
+| 401 | `Tiket sudah kadaluwarsa, login lagi.` | Token sudah expired |
+| 401 | `Tiket palsu!` | Signature token tidak valid |
 
 ---
 
-### Ruang (Room)
+## Referensi HTTP API
 
-#### Create Room
-```
-POST /penawaran/ruang
-```
+**Base URL:** `http://<host>:8000`
+
+Semua request membutuhkan header `Authorization: Bearer <token>`.  
+Semua response bertipe `Content-Type: application/json`.
+
+---
+
+## Ruang
+
+Modul ini mengelola data ruang (kelas, lab, aula) yang dapat digunakan untuk penjadwalan. Ruang perlu dibuat terlebih dahulu sebelum dapat dipakai di jadwal.
+
+---
+
+### `POST /penawaran/ruang` — Buat Ruang Baru
+
+Menambahkan ruang baru ke dalam sistem. `kode_ruang` harus unik. Ruang yang baru dibuat otomatis berstatus `tersedia`.
 
 **Request body:**
 ```json
@@ -231,16 +250,16 @@ POST /penawaran/ruang
 }
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `kode_ruang` | string | yes | Unique room code |
-| `nama_ruang` | string | no | Display name |
-| `tipe` | string | no | `kelas` (default) or `lab` or `aula` |
-| `kapasitas` | integer | no | Seat capacity (default: 0) |
-| `gedung` | string | no | Building name |
-| `status` | string | no | `tersedia` (default) or `nonaktif` |
+| Field | Tipe | Wajib | Keterangan |
+|-------|------|-------|------------|
+| `kode_ruang` | string | ya | Kode unik ruang |
+| `nama_ruang` | string | tidak | Nama tampilan ruang |
+| `tipe` | string | tidak | `kelas` (default), `lab`, atau `aula` |
+| `kapasitas` | integer | tidak | Kapasitas tempat duduk (default: 0) |
+| `gedung` | string | tidak | Nama gedung |
+| `status` | string | tidak | `tersedia` (default) atau `nonaktif` |
 
-**Response `200`:**
+**Respons `200`:**
 ```json
 {
   "status": "success",
@@ -250,16 +269,15 @@ POST /penawaran/ruang
 
 ---
 
-#### List Rooms
-```
-GET /penawaran/ruang
-GET /penawaran/ruang?tipe=kelas
-GET /penawaran/ruang?status=tersedia
-```
+### `GET /penawaran/ruang` — Daftar Semua Ruang
 
-**Query params (optional):** `tipe`, `status`
+Mengambil seluruh data ruang. Dapat difilter berdasarkan tipe atau status. Berguna untuk menampilkan pilihan ruang saat membuat jadwal.
 
-**Response `200`:**
+**Query parameter (opsional):** `tipe`, `status`
+
+Contoh: `GET /penawaran/ruang?tipe=kelas&status=tersedia`
+
+**Respons `200`:**
 ```json
 [
   {
@@ -276,22 +294,20 @@ GET /penawaran/ruang?status=tersedia
 
 ---
 
-#### Get Room by ID
-```
-GET /penawaran/ruang/<ruang_id>
-```
+### `GET /penawaran/ruang/<ruang_id>` — Detail Ruang
 
-**Response `200`:** same object as above  
-**Response `404`:** `{"status": "error", "message": "ruang tidak ditemukan"}`
+Mengambil data satu ruang berdasarkan ID-nya.
+
+**Respons `200`:** objek ruang (sama seperti di atas)  
+**Respons `404`:** `{"status": "error", "message": "ruang tidak ditemukan"}`
 
 ---
 
-#### Update Room
-```
-PUT /penawaran/ruang/<ruang_id>
-```
+### `PUT /penawaran/ruang/<ruang_id>` — Update Ruang
 
-**Request body** (any subset of fields):
+Mengubah data ruang yang sudah ada. Hanya field yang dikirim yang akan diupdate, field lain tidak berubah.
+
+**Request body** (kirim hanya field yang ingin diubah):
 ```json
 {
   "kapasitas": 50,
@@ -299,31 +315,33 @@ PUT /penawaran/ruang/<ruang_id>
 }
 ```
 
-**Response `200`:** `{"status": "success", "message": "Ruang berhasil diupdate"}`  
-**Response `404`:** `{"status": "error", "message": "ruang tidak ditemukan"}`
+Field yang bisa diubah: `nama_ruang`, `tipe`, `kapasitas`, `gedung`, `status`
+
+**Respons `200`:** `{"status": "success", "message": "Ruang berhasil diupdate"}`  
+**Respons `404`:** `{"status": "error", "message": "ruang tidak ditemukan"}`
 
 ---
 
-#### Deactivate Room
-```
-DELETE /penawaran/ruang/<ruang_id>
-```
+### `DELETE /penawaran/ruang/<ruang_id>` — Nonaktifkan Ruang
 
-Sets room status to `nonaktif` (soft delete).
+Melakukan soft delete dengan mengubah status ruang menjadi `nonaktif`. Data ruang tidak dihapus dari database.
 
-**Response `200`:** `{"status": "success", "message": "Ruang berhasil dinonaktifkan"}`  
-**Response `404`:** `{"status": "error", "message": "ruang tidak ditemukan"}`
+**Respons `200`:** `{"status": "success", "message": "Ruang berhasil dinonaktifkan"}`  
+**Respons `404`:** `{"status": "error", "message": "ruang tidak ditemukan"}`
 
 ---
 
-### Kelas (Class)
+## Kelas
 
-#### Create Class
-```
-POST /penawaran/kelas
-```
+Modul ini mengelola data kelas yang ditawarkan. Kelas merupakan entitas utama yang menghubungkan mata kuliah, semester, dan unit organisasi.
 
-> Requires `master_service` to be running (validates course, semester, unit).
+---
+
+### `POST /penawaran/kelas` — Buat Kelas Baru
+
+Membuat penawaran kelas baru. Sebelum menyimpan, service ini memanggil `master_service` untuk memvalidasi bahwa `course_id`, `semester_id`, dan `unit_id` benar-benar ada. Jika salah satu tidak ditemukan di master, kelas tidak akan dibuat.
+
+> ⚠️ Endpoint ini membutuhkan `master_service` aktif. Pastikan master service sudah berjalan sebelum memanggil endpoint ini.
 
 **Request body:**
 ```json
@@ -338,30 +356,32 @@ POST /penawaran/kelas
 }
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `kode_kelas` | string | yes | Unique class code |
-| `course_id` | integer | yes | Must exist in master service |
-| `semester_id` | integer | yes | Must exist in master service |
-| `unit_id` | integer | yes | Must exist in master service |
-| `curriculum_id` | integer | no | Optional curriculum reference |
-| `kuota` | integer | no | Max enrollment (default: 0) |
-| `metode` | string | no | `luring` (default), `daring`, or `hybrid` |
+| Field | Tipe | Wajib | Keterangan |
+|-------|------|-------|------------|
+| `kode_kelas` | string | ya | Kode unik kelas |
+| `course_id` | integer | ya | ID mata kuliah dari master service |
+| `semester_id` | integer | ya | ID semester dari master service |
+| `unit_id` | integer | ya | ID unit/prodi dari master service |
+| `curriculum_id` | integer | tidak | ID kurikulum dari master service |
+| `kuota` | integer | tidak | Batas maksimal peserta (default: 0) |
+| `metode` | string | tidak | `luring` (default), `daring`, atau `hybrid` |
 
-**Response `200`:** `{"status": "success", "kelas_id": 1}`  
-**Response `400`:** `{"status": "error", "message": "mata kuliah tidak ditemukan"}` (or semester/unit)
+**Respons `200`:** `{"status": "success", "kelas_id": 1}`  
+**Respons `400`:** `{"status": "error", "message": "mata kuliah tidak ditemukan"}`  
+**Respons `400`:** `{"status": "error", "message": "semester tidak ditemukan"}`  
+**Respons `400`:** `{"status": "error", "message": "unit tidak ditemukan"}`
 
 ---
 
-#### List Classes
-```
-GET /penawaran/kelas
-GET /penawaran/kelas?semester_id=1
-GET /penawaran/kelas?unit_id=2
-GET /penawaran/kelas?semester_id=1&unit_id=2
-```
+### `GET /penawaran/kelas` — Daftar Semua Kelas
 
-**Response `200`:**
+Mengambil semua data kelas. Bisa difilter berdasarkan semester atau unit. Berguna untuk menampilkan daftar kelas yang tersedia di suatu semester tertentu.
+
+**Query parameter (opsional):** `semester_id`, `unit_id`
+
+Contoh: `GET /penawaran/kelas?semester_id=1&unit_id=2`
+
+**Respons `200`:**
 ```json
 [
   {
@@ -371,7 +391,7 @@ GET /penawaran/kelas?semester_id=1&unit_id=2
     "semester_id": 1,
     "unit_id": 1,
     "kuota": 30,
-    "jumlah_terisi": 0,
+    "jumlah_terisi": 5,
     "metode": "luring",
     "status": "aktif"
   }
@@ -380,14 +400,13 @@ GET /penawaran/kelas?semester_id=1&unit_id=2
 
 ---
 
-#### Get Available Classes (for PRS)
-```
-GET /penawaran/kelas/tersedia?semester_id=1
-```
+### `GET /penawaran/kelas/tersedia?semester_id=<id>` — Kelas Tersedia untuk PRS
 
-Returns only active classes with remaining quota for a given semester. Intended for use by the PRS (pengisian rencana studi) service.
+Mengambil daftar kelas yang berstatus `aktif` dan masih memiliki sisa kuota pada semester tertentu. Endpoint ini dirancang khusus untuk digunakan oleh **service PRS (Pengisian Rencana Studi)** agar mahasiswa hanya bisa memilih kelas yang benar-benar tersedia.
 
-**Response `200`:**
+Field `sisa` menunjukkan berapa slot yang masih bisa diisi (`kuota - jumlah_terisi`).
+
+**Respons `200`:**
 ```json
 [
   {
@@ -395,7 +414,7 @@ Returns only active classes with remaining quota for a given semester. Intended 
     "kode_kelas": "MK001-A",
     "course_id": 1,
     "kuota": 30,
-    "sisa": 28,
+    "sisa": 25,
     "metode": "luring"
   }
 ]
@@ -403,12 +422,11 @@ Returns only active classes with remaining quota for a given semester. Intended 
 
 ---
 
-#### Get Class by ID
-```
-GET /penawaran/kelas/<kelas_id>
-```
+### `GET /penawaran/kelas/<kelas_id>` — Detail Kelas
 
-**Response `200`:**
+Mengambil data lengkap satu kelas berdasarkan ID, termasuk jumlah peserta yang sudah terdaftar.
+
+**Respons `200`:**
 ```json
 {
   "kelas_id": 1,
@@ -418,23 +436,23 @@ GET /penawaran/kelas/<kelas_id>
   "unit_id": 1,
   "curriculum_id": null,
   "kuota": 30,
-  "jumlah_terisi": 0,
+  "jumlah_terisi": 5,
   "metode": "luring",
   "status": "aktif"
 }
 ```
 
-**Response `404`:** `{"status": "error", "message": "kelas tidak ditemukan"}`
+**Respons `404`:** `{"status": "error", "message": "kelas tidak ditemukan"}`
 
 ---
 
-#### Update Class
-```
-PUT /penawaran/kelas/<kelas_id>
-```
+### `PUT /penawaran/kelas/<kelas_id>` — Update Kelas
 
-**Updatable fields:** `kode_kelas`, `kuota`, `metode`, `status`
+Mengubah data kelas. Hanya field yang dikirim yang akan diupdate.
 
+Field yang bisa diubah: `kode_kelas`, `kuota`, `metode`, `status`
+
+**Request body:**
 ```json
 {
   "kuota": 40,
@@ -442,31 +460,31 @@ PUT /penawaran/kelas/<kelas_id>
 }
 ```
 
-**Response `200`:** `{"status": "success", "message": "Kelas berhasil diupdate"}`  
-**Response `404`:** `{"status": "error", "message": "kelas tidak ditemukan"}`
+**Respons `200`:** `{"status": "success", "message": "Kelas berhasil diupdate"}`  
+**Respons `404`:** `{"status": "error", "message": "kelas tidak ditemukan"}`
 
 ---
 
-#### Deactivate Class
-```
-DELETE /penawaran/kelas/<kelas_id>
-```
+### `DELETE /penawaran/kelas/<kelas_id>` — Nonaktifkan Kelas
 
-Sets class status to `nonaktif` (soft delete).
+Melakukan soft delete dengan mengubah status kelas menjadi `nonaktif`. Kelas yang nonaktif tidak akan muncul di hasil `get_kelas_tersedia`, sehingga mahasiswa tidak bisa memilihnya di PRS.
 
-**Response `200`:** `{"status": "success", "message": "Kelas berhasil dinonaktifkan"}`  
-**Response `404`:** `{"status": "error", "message": "kelas tidak ditemukan"}`
+**Respons `200`:** `{"status": "success", "message": "Kelas berhasil dinonaktifkan"}`  
+**Respons `404`:** `{"status": "error", "message": "kelas tidak ditemukan"}`
 
 ---
 
-### Dosen per Kelas
+## Dosen per Kelas
 
-#### Assign Lecturer to Class
-```
-POST /penawaran/kelas/<kelas_id>/dosen
-```
+Modul ini mengelola penugasan dosen ke kelas. Satu kelas bisa memiliki lebih dari satu dosen dengan peran yang berbeda (pengampu utama atau asisten).
 
-> Requires `master_service` to be running (validates lecturer_id).
+---
+
+### `POST /penawaran/kelas/<kelas_id>/dosen` — Tugaskan Dosen ke Kelas
+
+Menambahkan dosen ke sebuah kelas. Service ini akan memanggil `master_service` untuk memverifikasi bahwa dosen dengan `lecturer_id` tersebut benar-benar terdaftar.
+
+> ⚠️ Endpoint ini membutuhkan `master_service` aktif.
 
 **Request body:**
 ```json
@@ -476,55 +494,68 @@ POST /penawaran/kelas/<kelas_id>/dosen
 }
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `lecturer_id` | integer | yes | Must exist in master service |
-| `peran` | string | no | `pengampu` (default) or `asisten` |
+| Field | Tipe | Wajib | Keterangan |
+|-------|------|-------|------------|
+| `lecturer_id` | integer | ya | ID dosen dari master service |
+| `peran` | string | tidak | `pengampu` (default) atau `asisten` |
 
-**Response `200`:** `{"status": "success", "kelas_dosen_id": 1}`  
-**Response `400`:** `{"status": "error", "message": "dosen tidak ditemukan"}`  
-**Response `400`:** `{"status": "error", "message": "kelas tidak ditemukan"}`
+**Respons `200`:** `{"status": "success", "kelas_dosen_id": 1}`  
+**Respons `400`:** `{"status": "error", "message": "dosen tidak ditemukan"}`  
+**Respons `400`:** `{"status": "error", "message": "kelas tidak ditemukan"}`
 
 ---
 
-#### Get Lecturers of a Class
-```
-GET /penawaran/kelas/<kelas_id>/dosen
-```
+### `GET /penawaran/kelas/<kelas_id>/dosen` — Daftar Dosen di Kelas
 
-**Response `200`:**
+Mengambil semua dosen yang ditugaskan ke sebuah kelas beserta perannya.
+
+**Respons `200`:**
 ```json
 [
   {
     "kelas_dosen_id": 1,
     "lecturer_id": 5,
     "peran": "pengampu"
+  },
+  {
+    "kelas_dosen_id": 2,
+    "lecturer_id": 7,
+    "peran": "asisten"
   }
 ]
 ```
 
 ---
 
-#### Remove Lecturer from Class
-```
-DELETE /penawaran/kelas/dosen/<kelas_dosen_id>
-```
+### `DELETE /penawaran/kelas/dosen/<kelas_dosen_id>` — Hapus Dosen dari Kelas
 
-**Response `200`:** `{"status": "success", "message": "Dosen berhasil dihapus dari kelas"}`  
-**Response `404`:** `{"status": "error", "message": "data dosen kelas tidak ditemukan"}`
+Menghapus penugasan dosen dari kelas berdasarkan `kelas_dosen_id` (bukan `lecturer_id`). `kelas_dosen_id` didapat dari respons saat menambahkan dosen atau dari endpoint GET dosen di atas.
+
+**Respons `200`:** `{"status": "success", "message": "Dosen berhasil dihapus dari kelas"}`  
+**Respons `404`:** `{"status": "error", "message": "data dosen kelas tidak ditemukan"}`
 
 ---
 
-### Jadwal (Schedule)
+## Jadwal
 
-#### Create Schedule
-```
-POST /penawaran/kelas/<kelas_id>/jadwal
-```
+Modul ini mengelola jadwal kelas. Terdapat dua tipe jadwal:
+- **Kuliah** — jadwal mingguan berulang, menggunakan field `hari`
+- **Ujian** — jadwal sekali pakai pada tanggal tertentu, menggunakan field `tanggal`
 
-Supports two schedule types: **regular weekly** (use `hari`) and **one-time exam** (use `tanggal`).
+Sistem secara otomatis mengecek **tabrakan ruang** sebelum menyimpan jadwal baru.
 
-**Request body — regular class schedule:**
+---
+
+### `POST /penawaran/kelas/<kelas_id>/jadwal` — Buat Jadwal
+
+Membuat jadwal untuk sebuah kelas. Jika `ruang_id` disertakan, sistem akan mengecek apakah ruang tersebut sudah dipakai pada waktu yang sama:
+
+- Jika `hari` dikirim → cek apakah ada jadwal mingguan lain di ruang yang sama yang bertabrakan jam
+- Jika `tanggal` dikirim → cek apakah ada jadwal lain di ruang yang sama pada tanggal dan jam yang sama
+
+Cek tabrakan dianggap terjadi jika: `jam_mulai request < jam_selesai existing` **dan** `jam_selesai request > jam_mulai existing`.
+
+**Request body — jadwal kuliah mingguan:**
 ```json
 {
   "tipe": "kuliah",
@@ -535,7 +566,7 @@ Supports two schedule types: **regular weekly** (use `hari`) and **one-time exam
 }
 ```
 
-**Request body — exam schedule:**
+**Request body — jadwal ujian (tanggal spesifik):**
 ```json
 {
   "tipe": "ujian",
@@ -546,31 +577,26 @@ Supports two schedule types: **regular weekly** (use `hari`) and **one-time exam
 }
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `tipe` | string | no | `kuliah` (default) or `ujian` |
-| `hari` | string | no | Day name e.g. `Senin`, `Selasa` (for weekly schedule) |
-| `tanggal` | string | no | Date in `YYYY-MM-DD` format (for exam/one-time) |
-| `jam_mulai` | string | yes | Start time `HH:MM` |
-| `jam_selesai` | string | yes | End time `HH:MM` |
-| `ruang_id` | integer | no | Room ID (enables collision check) |
+| Field | Tipe | Wajib | Keterangan |
+|-------|------|-------|------------|
+| `tipe` | string | tidak | `kuliah` (default) atau `ujian` |
+| `hari` | string | tidak | Nama hari untuk jadwal mingguan, e.g. `Senin`, `Selasa` |
+| `tanggal` | string | tidak | Tanggal spesifik format `YYYY-MM-DD` untuk ujian |
+| `jam_mulai` | string | ya | Jam mulai format `HH:MM` |
+| `jam_selesai` | string | ya | Jam selesai format `HH:MM` |
+| `ruang_id` | integer | tidak | ID ruang (jika diisi, pengecekan tabrakan aktif) |
 
-**Collision check behavior:**
-- If `ruang_id` + `hari` provided: checks for weekly time overlap in the same room
-- If `ruang_id` + `tanggal` provided: checks for date+time overlap in the same room
-
-**Response `200`:** `{"status": "success", "jadwal_id": 1}`  
-**Response `400`:** `{"status": "error", "message": "ruang bentrok pada jam tersebut"}`  
-**Response `400`:** `{"status": "error", "message": "ruang sudah dipakai pada tanggal dan jam tersebut"}`
+**Respons `200`:** `{"status": "success", "jadwal_id": 1}`  
+**Respons `400`:** `{"status": "error", "message": "ruang bentrok pada jam tersebut"}` — tabrakan jadwal mingguan  
+**Respons `400`:** `{"status": "error", "message": "ruang sudah dipakai pada tanggal dan jam tersebut"}` — tabrakan jadwal ujian
 
 ---
 
-#### Get Schedules of a Class
-```
-GET /penawaran/kelas/<kelas_id>/jadwal
-```
+### `GET /penawaran/kelas/<kelas_id>/jadwal` — Daftar Jadwal Kelas
 
-**Response `200`:**
+Mengambil semua jadwal yang dimiliki sebuah kelas, baik jadwal kuliah mingguan maupun jadwal ujian. Field `is_outdated` menandai jadwal yang sudah tidak berlaku lagi.
+
+**Respons `200`:**
 ```json
 [
   {
@@ -598,129 +624,129 @@ GET /penawaran/kelas/<kelas_id>/jadwal
 
 ---
 
-#### Delete Schedule
-```
-DELETE /penawaran/jadwal/<jadwal_id>
-```
+### `DELETE /penawaran/jadwal/<jadwal_id>` — Hapus Jadwal
 
-**Response `200`:** `{"status": "success", "message": "Jadwal berhasil dihapus"}`
+Menghapus jadwal secara permanen berdasarkan `jadwal_id`. `jadwal_id` didapat dari respons `buat_jadwal` atau dari endpoint GET jadwal di atas.
+
+**Respons `200`:** `{"status": "success", "message": "Jadwal berhasil dihapus"}`
 
 ---
 
-## RPC Interface
+## Integrasi via RPC (Antar Service)
 
-Other Nameko services can call this service directly via RPC (no HTTP, no JWT needed).
+Service Nameko lain dapat memanggil `penawaran_kelas` langsung via RPC tanpa melewati HTTP gateway dan tanpa membutuhkan JWT. Ini adalah cara yang disarankan untuk komunikasi antar service.
 
-**Service name:** `penawaran_kelas`
+**Nama service:** `penawaran_kelas`
 
+**Contoh penggunaan:**
 ```python
 from nameko.rpc import RpcProxy
 
-class YourService:
+class ServiceLain:
     penawaran_kelas = RpcProxy("penawaran_kelas")
 
-    def some_method(self):
-        # Get all available classes for a semester
+    def contoh(self):
+        # Ambil kelas yang tersedia untuk PRS
         kelas_list = self.penawaran_kelas.get_kelas_tersedia(semester_id=1)
 
-        # Get a single class
+        # Ambil detail kelas
         kelas = self.penawaran_kelas.get_kelas(kelas_id=1)
 
-        # Get schedules
+        # Ambil jadwal kelas
         jadwal = self.penawaran_kelas.get_jadwal(kelas_id=1)
 ```
 
-**Available RPC methods:**
+**Daftar method RPC yang tersedia:**
 
-| Method | Parameters | Returns |
-|--------|------------|---------|
-| `create_kelas(data)` | dict with kode_kelas, course_id, semester_id, unit_id | `kelas_id` (int) or `{"error": ...}` |
-| `get_kelas(kelas_id)` | int | kelas dict or `{"error": ...}` |
-| `list_kelas(semester_id, unit_id)` | optional ints | list of kelas dicts |
-| `update_kelas(kelas_id, data)` | int, dict | `{"ok": True}` or `{"error": ...}` |
-| `nonaktifkan_kelas(kelas_id)` | int | `{"ok": True}` or `{"error": ...}` |
-| `get_kelas_tersedia(semester_id)` | int | list of available kelas with `sisa` quota |
+| Method | Parameter | Return |
+|--------|-----------|--------|
+| `create_kelas(data)` | dict | `kelas_id` (int) atau `{"error": ...}` |
+| `get_kelas(kelas_id)` | int | dict kelas atau `{"error": ...}` |
+| `list_kelas(semester_id, unit_id)` | int opsional | list dict kelas |
+| `update_kelas(kelas_id, data)` | int, dict | `{"ok": True}` atau `{"error": ...}` |
+| `nonaktifkan_kelas(kelas_id)` | int | `{"ok": True}` atau `{"error": ...}` |
+| `get_kelas_tersedia(semester_id)` | int | list kelas aktif dengan field `sisa` |
 | `create_ruang(data)` | dict | `ruang_id` (int) |
-| `get_ruang(ruang_id)` | int | ruang dict or `{"error": ...}` |
-| `list_ruang(tipe, status)` | optional strings | list of ruang dicts |
-| `update_ruang(ruang_id, data)` | int, dict | `{"ok": True}` or `{"error": ...}` |
-| `hapus_ruang(ruang_id)` | int | `{"ok": True}` or `{"error": ...}` |
-| `tambah_dosen(kelas_id, lecturer_id, peran)` | int, int, str | `kelas_dosen_id` (int) or `{"error": ...}` |
-| `get_dosen_by_kelas(kelas_id)` | int | list of kelas_dosen dicts |
-| `remove_dosen(kelas_dosen_id)` | int | `{"ok": True}` or `{"error": ...}` |
-| `buat_jadwal(kelas_id, data)` | int, dict | `jadwal_id` (int) or `{"error": ...}` |
-| `get_jadwal(kelas_id)` | int | list of jadwal dicts |
+| `get_ruang(ruang_id)` | int | dict ruang atau `{"error": ...}` |
+| `list_ruang(tipe, status)` | string opsional | list dict ruang |
+| `update_ruang(ruang_id, data)` | int, dict | `{"ok": True}` atau `{"error": ...}` |
+| `hapus_ruang(ruang_id)` | int | `{"ok": True}` atau `{"error": ...}` |
+| `tambah_dosen(kelas_id, lecturer_id, peran)` | int, int, str | `kelas_dosen_id` (int) atau `{"error": ...}` |
+| `get_dosen_by_kelas(kelas_id)` | int | list dict kelas_dosen |
+| `remove_dosen(kelas_dosen_id)` | int | `{"ok": True}` atau `{"error": ...}` |
+| `buat_jadwal(kelas_id, data)` | int, dict | `jadwal_id` (int) atau `{"error": ...}` |
+| `get_jadwal(kelas_id)` | int | list dict jadwal |
 | `hapus_jadwal(jadwal_id)` | int | `{"ok": True}` |
 
 ---
 
-## Data Models
+## Model Data
 
 ### Kelas
 
-| Column | Type | Description |
-|--------|------|-------------|
+| Kolom | Tipe | Keterangan |
+|-------|------|------------|
 | `kelas_id` | BigInteger PK | Auto-increment |
-| `kode_kelas` | String | Unique class code |
-| `course_id` | BigInteger | FK to master service course |
-| `semester_id` | BigInteger | FK to master service semester |
-| `unit_id` | BigInteger | FK to master service unit |
-| `curriculum_id` | BigInteger | FK to master service curriculum (nullable) |
-| `kuota` | Integer | Maximum enrollment |
-| `jumlah_terisi` | Integer | Current enrollment count (default 0) |
-| `metode` | String | `luring`, `daring`, or `hybrid` |
-| `status` | String | `aktif` or `nonaktif` |
+| `kode_kelas` | String | Kode unik kelas |
+| `course_id` | BigInteger | Referensi ke mata kuliah di master service |
+| `semester_id` | BigInteger | Referensi ke semester di master service |
+| `unit_id` | BigInteger | Referensi ke unit/prodi di master service |
+| `curriculum_id` | BigInteger | Referensi ke kurikulum di master service (nullable) |
+| `kuota` | Integer | Batas maksimal peserta |
+| `jumlah_terisi` | Integer | Jumlah peserta yang sudah terdaftar (default 0) |
+| `metode` | String | `luring`, `daring`, atau `hybrid` |
+| `status` | String | `aktif` atau `nonaktif` |
 
 ### KelasDosen
 
-| Column | Type | Description |
-|--------|------|-------------|
+| Kolom | Tipe | Keterangan |
+|-------|------|------------|
 | `kelas_dosen_id` | BigInteger PK | Auto-increment |
-| `kelas_id` | BigInteger FK | References Kelas |
-| `lecturer_id` | BigInteger | FK to master service lecturer |
-| `peran` | String | `pengampu` or `asisten` |
+| `kelas_id` | BigInteger FK | Referensi ke Kelas |
+| `lecturer_id` | BigInteger | Referensi ke dosen di master service |
+| `peran` | String | `pengampu` atau `asisten` |
 
 ### Ruang
 
-| Column | Type | Description |
-|--------|------|-------------|
+| Kolom | Tipe | Keterangan |
+|-------|------|------------|
 | `ruang_id` | BigInteger PK | Auto-increment |
-| `kode_ruang` | String | Unique room code |
-| `nama_ruang` | String | Display name (nullable) |
-| `tipe` | String | `kelas`, `lab`, or `aula` |
-| `kapasitas` | Integer | Seat capacity |
-| `gedung` | String | Building name (nullable) |
-| `status` | String | `tersedia` or `nonaktif` |
+| `kode_ruang` | String | Kode unik ruang |
+| `nama_ruang` | String | Nama tampilan ruang (nullable) |
+| `tipe` | String | `kelas`, `lab`, atau `aula` |
+| `kapasitas` | Integer | Kapasitas tempat duduk |
+| `gedung` | String | Nama gedung (nullable) |
+| `status` | String | `tersedia` atau `nonaktif` |
 
 ### Jadwal
 
-| Column | Type | Description |
-|--------|------|-------------|
+| Kolom | Tipe | Keterangan |
+|-------|------|------------|
 | `jadwal_id` | BigInteger PK | Auto-increment |
-| `kelas_id` | BigInteger FK | References Kelas |
-| `ruang_id` | BigInteger FK | References Ruang (nullable) |
-| `tipe` | String | `kuliah` or `ujian` |
-| `hari` | String | Day name for weekly schedule (nullable) |
-| `tanggal` | Date | Specific date for exam (nullable) |
-| `jam_mulai` | Time | Start time |
-| `jam_selesai` | Time | End time |
-| `is_outdated` | Boolean | Marked true when schedule is no longer valid (default false) |
+| `kelas_id` | BigInteger FK | Referensi ke Kelas |
+| `ruang_id` | BigInteger FK | Referensi ke Ruang (nullable) |
+| `tipe` | String | `kuliah` atau `ujian` |
+| `hari` | String | Nama hari untuk jadwal mingguan (nullable) |
+| `tanggal` | Date | Tanggal spesifik untuk ujian (nullable) |
+| `jam_mulai` | Time | Jam mulai |
+| `jam_selesai` | Time | Jam selesai |
+| `is_outdated` | Boolean | Menandai jadwal yang sudah tidak berlaku (default false) |
 
 ---
 
-## Error Responses
+## Format Error
 
-All error responses follow this format:
+Semua respons error menggunakan format yang konsisten:
 
 ```json
 {
   "status": "error",
-  "message": "<description>"
+  "message": "<deskripsi error>"
 }
 ```
 
-| HTTP Status | Meaning |
-|-------------|---------|
-| 400 | Bad request / validation failed |
-| 401 | Missing or invalid JWT token |
-| 404 | Resource not found |
+| HTTP Status | Arti |
+|-------------|------|
+| 400 | Request tidak valid atau validasi gagal |
+| 401 | Token JWT tidak ada atau tidak valid |
+| 404 | Data tidak ditemukan |
