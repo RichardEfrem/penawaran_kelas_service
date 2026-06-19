@@ -104,6 +104,8 @@ class PenawaranKelasService:
         kelas = self.db.query(Kelas).get(kelas_id)
         if not kelas:
             return {"error": "kelas tidak ditemukan"}
+        if self.db.query(KelasDosen).filter_by(kelas_id=kelas_id, lecturer_id=lecturer_id).first():
+            return {"error": "dosen sudah terdaftar di kelas ini"}
         kd = KelasDosen(kelas_id=kelas_id, lecturer_id=lecturer_id, peran=peran)
         self.db.add(kd)
         self.db.commit()
@@ -129,6 +131,8 @@ class PenawaranKelasService:
     # ---------- C. Ruang ----------
     @rpc
     def create_ruang(self, data):
+        if self.db.query(Ruang).filter_by(kode_ruang=data["kode_ruang"]).first():
+            return {"error": "kode_ruang sudah digunakan"}
         r = Ruang(
             kode_ruang=data["kode_ruang"],
             nama_ruang=data.get("nama_ruang"),
@@ -213,6 +217,7 @@ class PenawaranKelasService:
                     .filter(
                         Jadwal.ruang_id == data["ruang_id"],
                         Jadwal.hari == data["hari"],
+                        Jadwal.is_outdated == False,
                         Jadwal.jam_mulai < data["jam_selesai"],
                         Jadwal.jam_selesai > data["jam_mulai"],
                     )
@@ -226,6 +231,7 @@ class PenawaranKelasService:
                     .filter(
                         Jadwal.ruang_id == data["ruang_id"],
                         Jadwal.tanggal == data["tanggal"],
+                        Jadwal.is_outdated == False,
                         Jadwal.jam_mulai < data["jam_selesai"],
                         Jadwal.jam_selesai > data["jam_mulai"],
                     )
@@ -277,7 +283,11 @@ class PenawaranKelasService:
     def get_kelas_tersedia(self, semester_id):
         rows = (
             self.db.query(Kelas)
-            .filter_by(semester_id=semester_id, status="aktif")
+            .filter(
+                Kelas.semester_id == semester_id,
+                Kelas.status == "aktif",
+                Kelas.kuota > Kelas.jumlah_terisi,
+            )
             .all()
         )
         return [

@@ -210,6 +210,8 @@ Menambahkan ruang baru ke dalam sistem. `kode_ruang` harus unik. Ruang yang baru
 }
 ```
 
+**Respons `400`:** `{"status": "error", "message": "kode_ruang sudah digunakan"}`
+
 ---
 
 ### `GET /penawaran/ruang` — Daftar Semua Ruang
@@ -345,9 +347,9 @@ Contoh: `GET /penawaran/kelas?semester_id=1&unit_id=2`
 
 ### `GET /penawaran/kelas/tersedia?semester_id=<id>` — Kelas Tersedia untuk PRS
 
-Mengambil daftar kelas yang berstatus `aktif` dan masih memiliki sisa kuota pada semester tertentu. Endpoint ini dirancang khusus untuk digunakan oleh **service PRS (Pengisian Rencana Studi)** agar mahasiswa hanya bisa memilih kelas yang benar-benar tersedia.
+Mengambil daftar kelas yang berstatus `aktif` dan masih memiliki sisa kuota (`sisa > 0`) pada semester tertentu. Endpoint ini dirancang khusus untuk digunakan oleh **service PRS (Pengisian Rencana Studi)** agar mahasiswa hanya bisa memilih kelas yang benar-benar tersedia.
 
-Field `sisa` menunjukkan berapa slot yang masih bisa diisi (`kuota - jumlah_terisi`).
+Kelas yang sudah penuh (`jumlah_terisi >= kuota`) **tidak akan muncul** di hasil ini. Field `sisa` menunjukkan berapa slot yang masih bisa diisi (`kuota - jumlah_terisi`).
 
 **Respons `200`:**
 ```json
@@ -444,7 +446,8 @@ Menambahkan dosen ke sebuah kelas. Service ini akan memanggil `master_service` u
 
 **Respons `200`:** `{"status": "success", "kelas_dosen_id": 1}`  
 **Respons `400`:** `{"status": "error", "message": "dosen tidak ditemukan"}`  
-**Respons `400`:** `{"status": "error", "message": "kelas tidak ditemukan"}`
+**Respons `400`:** `{"status": "error", "message": "kelas tidak ditemukan"}`  
+**Respons `400`:** `{"status": "error", "message": "dosen sudah terdaftar di kelas ini"}`
 
 ---
 
@@ -507,6 +510,8 @@ Membuat jadwal untuk sebuah kelas. Terdapat tiga tipe jadwal:
 - Jadwal ujian (`tanggal`): cek tabrakan jam di tanggal yang sama dalam ruang yang sama
 
 Cek tabrakan terjadi jika: `jam_mulai request < jam_selesai existing` **dan** `jam_selesai request > jam_mulai existing`.
+
+> Jadwal yang sudah dinonaktifkan (`is_outdated = true`) **tidak ikut diperiksa** dalam cek tabrakan, sehingga slot yang sudah dibebaskan bisa digunakan kembali.
 
 **Request body — jadwal kuliah mingguan:**
 ```json
@@ -573,7 +578,7 @@ Mengambil semua jadwal yang dimiliki sebuah kelas, baik jadwal kuliah mingguan m
   },
   {
     "jadwal_id": 2,
-    "tipe": "ujian",
+    "tipe": "uts",
     "hari": null,
     "tanggal": "2026-07-15",
     "jam_mulai": "08:00:00",
@@ -629,9 +634,9 @@ class ServiceLain:
 | `update_kelas(kelas_id, data)` | int, dict | `{"ok": True}` atau `{"error": ...}` |
 | `nonaktifkan_kelas(kelas_id)` | int | `{"ok": True}` atau `{"error": ...}` |
 | `get_kelas_tersedia(semester_id)` | int | list kelas aktif dengan field `sisa` |
-| `create_ruang(data)` | dict | `ruang_id` (int) |
+| `create_ruang(data)` | dict | `ruang_id` (int) atau `{"error": ...}` |
 | `get_ruang(ruang_id)` | int | dict ruang atau `{"error": ...}` |
-| `list_ruang(tipe, status)` | string opsional | list dict ruang |
+| `list_ruang(tipe, status, gedung)` | string opsional | list dict ruang |
 | `update_ruang(ruang_id, data)` | int, dict | `{"ok": True}` atau `{"error": ...}` |
 | `hapus_ruang(ruang_id)` | int | `{"ok": True}` atau `{"error": ...}` |
 | `tambah_dosen(kelas_id, lecturer_id, peran)` | int, int, str | `kelas_dosen_id` (int) atau `{"error": ...}` |

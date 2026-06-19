@@ -49,6 +49,8 @@ class GatewayService:
 
         body = json.loads(request.get_data(as_text=True))
         result = self.penawaran_kelas.create_ruang(body)
+        if isinstance(result, dict) and result.get("error"):
+            return self._ok({"status": "error", "message": result["error"]}, status=400)
         return self._ok({"status": "success", "ruang_id": result})
 
     @http('GET', '/penawaran/ruang')
