@@ -1,0 +1,50 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBIT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBIT_PASS}
+    ports:
+      - "5672:5672"     # AMQP (for nameko shell)
+      - "15672:15672"   # UI admin (batasi via security group)
+    restart: unless-stopped
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  penawaran_kelas:
+    build: .
+    depends_on: [rabbitmq, db]
+    environment:
+      RABBIT_HOST: rabbitmq
+      RABBIT_USER: ${RABBIT_USER}
+      RABBIT_PASS: ${RABBIT_PASS}
+      DB_HOST: db
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      DB_NAME: ${DB_NAME}
+    command: sh -c "sleep 10 && python create_tables.py && nameko run --config config.yaml penawaran_kelas.service"
+    restart: unless-stopped
+
+  gateway:
+    build: .
+    depends_on: [rabbitmq, penawaran_kelas]
+    ports:
+      - "8000:8000"
+    environment:
+      RABBIT_HOST: rabbitmq
+      RABBIT_USER: ${RABBIT_USER}
+      RABBIT_PASS: ${RABBIT_PASS}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+    command: sh -c "sleep 15 && nameko run --config config.yaml gateway"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
