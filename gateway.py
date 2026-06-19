@@ -244,5 +244,7 @@ class GatewayService:
             return self._ok(error, status=401)
 
         result = self.penawaran_kelas.hapus_jadwal(jadwal_id)
-        return self._ok({"status": "success", "message": "Jadwal berhasil dihapus"})
+        if isinstance(result, dict) and result.get("error"):
+            return self._ok({"status": "error", "message": result["error"]}, status=404)
+        return self._ok({"status": "success", "message": "Jadwal berhasil dinonaktifkan"})
 

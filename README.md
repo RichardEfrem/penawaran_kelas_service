@@ -352,7 +352,7 @@ Membuat penawaran kelas baru. Sebelum menyimpan, service ini memanggil `master_s
   "unit_id": 1,
   "curriculum_id": 1,
   "kuota": 30,
-  "metode": "luring"
+  "ruang_ujian_id": 2
 }
 ```
 
@@ -364,7 +364,7 @@ Membuat penawaran kelas baru. Sebelum menyimpan, service ini memanggil `master_s
 | `unit_id` | integer | ya | ID unit/prodi dari master service |
 | `curriculum_id` | integer | tidak | ID kurikulum dari master service |
 | `kuota` | integer | tidak | Batas maksimal peserta (default: 0) |
-| `metode` | string | tidak | `luring` (default), `daring`, atau `hybrid` |
+| `ruang_ujian_id` | integer | tidak | ID ruang yang dipakai untuk UTS dan UAS (jika diset, tidak perlu kirim `ruang_id` saat buat jadwal ujian) |
 
 **Respons `200`:** `{"status": "success", "kelas_id": 1}`  
 **Respons `400`:** `{"status": "error", "message": "mata kuliah tidak ditemukan"}`  
@@ -392,7 +392,7 @@ Contoh: `GET /penawaran/kelas?semester_id=1&unit_id=2`
     "unit_id": 1,
     "kuota": 30,
     "jumlah_terisi": 5,
-    "metode": "luring",
+    "ruang_ujian_id": 2,
     "status": "aktif"
   }
 ]
@@ -415,7 +415,7 @@ Field `sisa` menunjukkan berapa slot yang masih bisa diisi (`kuota - jumlah_teri
     "course_id": 1,
     "kuota": 30,
     "sisa": 25,
-    "metode": "luring"
+    "ruang_ujian_id": 2
   }
 ]
 ```
@@ -437,7 +437,7 @@ Mengambil data lengkap satu kelas berdasarkan ID, termasuk jumlah peserta yang s
   "curriculum_id": null,
   "kuota": 30,
   "jumlah_terisi": 5,
-  "metode": "luring",
+  "ruang_ujian_id": 2,
   "status": "aktif"
 }
 ```
@@ -450,13 +450,13 @@ Mengambil data lengkap satu kelas berdasarkan ID, termasuk jumlah peserta yang s
 
 Mengubah data kelas. Hanya field yang dikirim yang akan diupdate.
 
-Field yang bisa diubah: `kode_kelas`, `kuota`, `metode`, `status`
+Field yang bisa diubah: `kode_kelas`, `kuota`, `ruang_ujian_id`, `status`
 
 **Request body:**
 ```json
 {
   "kuota": 40,
-  "metode": "hybrid"
+  "ruang_ujian_id": 3
 }
 ```
 
@@ -538,9 +538,10 @@ Menghapus penugasan dosen dari kelas berdasarkan `kelas_dosen_id` (bukan `lectur
 
 ## Jadwal
 
-Modul ini mengelola jadwal kelas. Terdapat dua tipe jadwal:
+Modul ini mengelola jadwal kelas. Terdapat tiga tipe jadwal:
 - **Kuliah** — jadwal mingguan berulang, menggunakan field `hari`
-- **Ujian** — jadwal sekali pakai pada tanggal tertentu, menggunakan field `tanggal`
+- **UTS** — jadwal Ujian Tengah Semester pada tanggal tertentu
+- **UAS** — jadwal Ujian Akhir Semester pada tanggal tertentu
 
 Sistem secara otomatis mengecek **tabrakan ruang** sebelum menyimpan jadwal baru.
 
@@ -548,12 +549,21 @@ Sistem secara otomatis mengecek **tabrakan ruang** sebelum menyimpan jadwal baru
 
 ### `POST /penawaran/kelas/<kelas_id>/jadwal` — Buat Jadwal
 
-Membuat jadwal untuk sebuah kelas. Jika `ruang_id` disertakan, sistem akan mengecek apakah ruang tersebut sudah dipakai pada waktu yang sama:
+Membuat jadwal untuk sebuah kelas. Terdapat tiga tipe jadwal:
 
-- Jika `hari` dikirim → cek apakah ada jadwal mingguan lain di ruang yang sama yang bertabrakan jam
-- Jika `tanggal` dikirim → cek apakah ada jadwal lain di ruang yang sama pada tanggal dan jam yang sama
+| Tipe | Digunakan untuk | Field yang dipakai |
+|------|-----------------|-------------------|
+| `kuliah` | Pertemuan mingguan rutin | `hari`, `ruang_id` |
+| `uts` | Ujian Tengah Semester | `tanggal`, `ruang_id` auto dari kelas |
+| `uas` | Ujian Akhir Semester | `tanggal`, `ruang_id` auto dari kelas |
 
-Cek tabrakan dianggap terjadi jika: `jam_mulai request < jam_selesai existing` **dan** `jam_selesai request > jam_mulai existing`.
+**Auto-fill ruang untuk UTS/UAS:** jika kelas memiliki `ruang_ujian_id`, maka jadwal bertipe `uts` atau `uas` tidak perlu menyertakan `ruang_id` — sistem otomatis menggunakan ruang ujian yang sudah didaftarkan di kelas.
+
+**Cek tabrakan ruang** aktif jika `ruang_id` tersedia (baik dari input maupun auto-fill):
+- Jadwal kuliah (`hari`): cek tabrakan jam di hari yang sama dalam ruang yang sama
+- Jadwal ujian (`tanggal`): cek tabrakan jam di tanggal yang sama dalam ruang yang sama
+
+Cek tabrakan terjadi jika: `jam_mulai request < jam_selesai existing` **dan** `jam_selesai request > jam_mulai existing`.
 
 **Request body — jadwal kuliah mingguan:**
 ```json
@@ -566,25 +576,34 @@ Cek tabrakan dianggap terjadi jika: `jam_mulai request < jam_selesai existing` *
 }
 ```
 
-**Request body — jadwal ujian (tanggal spesifik):**
+**Request body — jadwal UTS (ruang auto dari kelas):**
 ```json
 {
-  "tipe": "ujian",
+  "tipe": "uts",
   "tanggal": "2026-07-15",
   "jam_mulai": "08:00",
-  "jam_selesai": "10:00",
-  "ruang_id": 1
+  "jam_selesai": "10:00"
+}
+```
+
+**Request body — jadwal UAS (ruang auto dari kelas):**
+```json
+{
+  "tipe": "uas",
+  "tanggal": "2026-08-20",
+  "jam_mulai": "08:00",
+  "jam_selesai": "10:00"
 }
 ```
 
 | Field | Tipe | Wajib | Keterangan |
 |-------|------|-------|------------|
-| `tipe` | string | tidak | `kuliah` (default) atau `ujian` |
-| `hari` | string | tidak | Nama hari untuk jadwal mingguan, e.g. `Senin`, `Selasa` |
-| `tanggal` | string | tidak | Tanggal spesifik format `YYYY-MM-DD` untuk ujian |
+| `tipe` | string | tidak | `kuliah` (default), `uts`, atau `uas` |
+| `hari` | string | tidak | Nama hari untuk jadwal kuliah, e.g. `Senin`, `Selasa` |
+| `tanggal` | string | tidak | Tanggal spesifik format `YYYY-MM-DD` untuk UTS/UAS |
 | `jam_mulai` | string | ya | Jam mulai format `HH:MM` |
 | `jam_selesai` | string | ya | Jam selesai format `HH:MM` |
-| `ruang_id` | integer | tidak | ID ruang (jika diisi, pengecekan tabrakan aktif) |
+| `ruang_id` | integer | tidak | ID ruang. Untuk `uts`/`uas` otomatis diambil dari `ruang_ujian_id` kelas jika tidak diisi |
 
 **Respons `200`:** `{"status": "success", "jadwal_id": 1}`  
 **Respons `400`:** `{"status": "error", "message": "ruang bentrok pada jam tersebut"}` — tabrakan jadwal mingguan  
@@ -624,11 +643,12 @@ Mengambil semua jadwal yang dimiliki sebuah kelas, baik jadwal kuliah mingguan m
 
 ---
 
-### `DELETE /penawaran/jadwal/<jadwal_id>` — Hapus Jadwal
+### `DELETE /penawaran/jadwal/<jadwal_id>` — Nonaktifkan Jadwal
 
-Menghapus jadwal secara permanen berdasarkan `jadwal_id`. `jadwal_id` didapat dari respons `buat_jadwal` atau dari endpoint GET jadwal di atas.
+Melakukan soft delete dengan menandai jadwal sebagai tidak berlaku lagi (`is_outdated = true`). Jadwal tidak dihapus dari database sehingga histori tetap tersimpan. `jadwal_id` didapat dari respons `buat_jadwal` atau dari endpoint GET jadwal di atas.
 
-**Respons `200`:** `{"status": "success", "message": "Jadwal berhasil dihapus"}`
+**Respons `200`:** `{"status": "success", "message": "Jadwal berhasil dinonaktifkan"}`  
+**Respons `404`:** `{"status": "error", "message": "jadwal tidak ditemukan"}`
 
 ---
 
@@ -694,7 +714,7 @@ class ServiceLain:
 | `curriculum_id` | BigInteger | Referensi ke kurikulum di master service (nullable) |
 | `kuota` | Integer | Batas maksimal peserta |
 | `jumlah_terisi` | Integer | Jumlah peserta yang sudah terdaftar (default 0) |
-| `metode` | String | `luring`, `daring`, atau `hybrid` |
+| `ruang_ujian_id` | BigInteger FK | Referensi ke Ruang yang dipakai untuk UTS dan UAS (nullable) |
 | `status` | String | `aktif` atau `nonaktif` |
 
 ### KelasDosen
@@ -725,7 +745,7 @@ class ServiceLain:
 | `jadwal_id` | BigInteger PK | Auto-increment |
 | `kelas_id` | BigInteger FK | Referensi ke Kelas |
 | `ruang_id` | BigInteger FK | Referensi ke Ruang (nullable) |
-| `tipe` | String | `kuliah` atau `ujian` |
+| `tipe` | String | `kuliah`, `uts`, atau `uas` |
 | `hari` | String | Nama hari untuk jadwal mingguan (nullable) |
 | `tanggal` | Date | Tanggal spesifik untuk ujian (nullable) |
 | `jam_mulai` | Time | Jam mulai |

@@ -18,7 +18,7 @@ class Kelas(Base):
     curriculum_id = Column(BigInteger, nullable=True)     # ref Master (opsional)
     kuota = Column(Integer, nullable=False, default=0)
     jumlah_terisi = Column(Integer, nullable=False, default=0)
-    metode = Column(String(10), default="luring")
+    ruang_ujian_id = Column(BigInteger, ForeignKey("ruang.ruang_id"), nullable=True)
     status = Column(String(15), default="draft")
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

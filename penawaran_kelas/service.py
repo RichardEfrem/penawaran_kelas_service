@@ -27,7 +27,7 @@ class PenawaranKelasService:
             unit_id=data["unit_id"],
             curriculum_id=data.get("curriculum_id"),
             kuota=data.get("kuota", 0),
-            metode=data.get("metode", "luring"),
+            ruang_ujian_id=data.get("ruang_ujian_id"),
             status="aktif",
         )
         self.db.add(kelas)
@@ -48,7 +48,7 @@ class PenawaranKelasService:
             "curriculum_id": k.curriculum_id,
             "kuota": k.kuota,
             "jumlah_terisi": k.jumlah_terisi,
-            "metode": k.metode,
+            "ruang_ujian_id": k.ruang_ujian_id,
             "status": k.status,
         }
 
@@ -69,7 +69,7 @@ class PenawaranKelasService:
                 "unit_id": k.unit_id,
                 "kuota": k.kuota,
                 "jumlah_terisi": k.jumlah_terisi,
-                "metode": k.metode,
+                "ruang_ujian_id": k.ruang_ujian_id,
                 "status": k.status,
             }
             for k in rows
@@ -80,7 +80,7 @@ class PenawaranKelasService:
         kelas = self.db.query(Kelas).get(kelas_id)
         if not kelas:
             return {"error": "kelas tidak ditemukan"}
-        for field in ("kode_kelas", "kuota", "metode", "status"):
+        for field in ("kode_kelas", "kuota", "ruang_ujian_id", "status"):
             if field in data:
                 setattr(kelas, field, data[field])
         self.db.commit()
@@ -200,6 +200,10 @@ class PenawaranKelasService:
     # ---------- D. Jadwal ----------
     @rpc
     def buat_jadwal(self, kelas_id, data):
+        if data.get("tipe") in ("uts", "uas") and not data.get("ruang_id"):
+            kelas = self.db.query(Kelas).get(kelas_id)
+            if kelas and kelas.ruang_ujian_id:
+                data["ruang_id"] = kelas.ruang_ujian_id
         if data.get("ruang_id"):
             if data.get("hari"):
                 bentrok = (
@@ -259,7 +263,10 @@ class PenawaranKelasService:
 
     @rpc
     def hapus_jadwal(self, jadwal_id):
-        self.db.query(Jadwal).filter_by(jadwal_id=jadwal_id).delete()
+        j = self.db.query(Jadwal).get(jadwal_id)
+        if not j:
+            return {"error": "jadwal tidak ditemukan"}
+        j.is_outdated = True
         self.db.commit()
         return {"ok": True}
 
@@ -278,7 +285,7 @@ class PenawaranKelasService:
                 "course_id": k.course_id,
                 "kuota": k.kuota,
                 "sisa": k.kuota - k.jumlah_terisi,
-                "metode": k.metode,
+                "ruang_ujian_id": k.ruang_ujian_id,
             }
             for k in rows
         ]
