@@ -10,7 +10,6 @@ Dibangun menggunakan **Nameko** (RPC over RabbitMQ) dengan **HTTP Gateway** di p
 
 - [Ketergantungan ke Master Service](#ketergantungan-ke-master-service)
 - [Menjalankan dengan Docker](#menjalankan-dengan-docker)
-- [Cara Update di EC2](#cara-update-di-ec2)
 - [Environment Variables](#environment-variables)
 - [Autentikasi (JWT)](#autentikasi-jwt)
 - [Admin UI](#admin-ui)
@@ -111,61 +110,6 @@ docker compose down       # hentikan container, data DB tetap ada
 docker compose down -v    # hentikan container + hapus data DB
 ```
 
----
-
-## Cara Update di EC2
-
-Setiap kali ada perubahan kode yang di-push ke repository, lakukan langkah berikut di server EC2.
-
-### 1. SSH ke EC2
-
-```bash
-ssh -i <nama-key.pem> ubuntu@<ec2-ip>
-```
-
-### 2. Masuk ke folder project dan pull perubahan
-
-```bash
-cd penawaran_kelas
-git pull
-```
-
-### 3. Rebuild dan restart container
-
-```bash
-# Rebuild semua service yang berubah
-docker compose up -d --build
-
-# Atau rebuild service tertentu saja (lebih cepat)
-docker compose up -d --build gateway
-docker compose up -d --build penawaran_kelas
-```
-
-> `rabbitmq` dan `db` tidak perlu di-rebuild kecuali ada perubahan di `docker-compose.yaml`.
-
-### 4. Verifikasi berjalan
-
-```bash
-docker compose ps
-docker compose logs -f gateway          # lihat log gateway
-docker compose logs -f penawaran_kelas  # lihat log service
-```
-
-Semua container harus berstatus `Up`. Jika ada yang `Exit`, lihat lognya untuk mencari penyebab error.
-
-### 5. Jalankan seeder (jika ada data master baru)
-
-```bash
-docker compose exec penawaran_kelas python seed.py
-```
-
-### Rollback jika terjadi masalah
-
-```bash
-git log --oneline -5          # lihat commit terakhir
-git checkout <commit-hash>    # kembali ke versi sebelumnya
-docker compose up -d --build
-```
 
 ---
 
