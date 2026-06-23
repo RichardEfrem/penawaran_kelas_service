@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Penawaran Kelas — Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root { --primary: #1d4ed8; --primary-dark: #1e40af; }
+        body { background: #f1f5f9; font-family: 'Segoe UI', system-ui, sans-serif; }
+
+        .top-bar {
+            background: var(--primary);
+            padding: 0.75rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        .top-bar .brand { color: white; font-size: 1.15rem; font-weight: 700; flex: 1; }
+
+        .token-bar {
+            background: white;
+            padding: 0.5rem 1.5rem;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card-panel {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+            padding: 1.25rem;
+        }
+
+        .table thead th {
+            background: #f8fafc;
+            font-weight: 600;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            color: #64748b;
+            letter-spacing: .03em;
+        }
+
+        .badge-aktif    { background: #dbeafe; color: #1e40af; }
+        .badge-tersedia { background: #dcfce7; color: #166534; }
+        .badge-nonaktif { background: #fee2e2; color: #991b1b; }
+
+        .detail-header {
+            background: linear-gradient(135deg, var(--primary), #3b82f6);
+            color: white;
+            border-radius: 12px;
+            padding: 1.25rem 1.5rem;
+        }
+
+        .nav-pills .nav-link.active { background: var(--primary); }
+        .nav-pills .nav-link { color: #475569; font-weight: 500; }
+
+        .btn-icon { padding: 0.2rem 0.45rem; line-height: 1; }
+
+        .outdated-row { opacity: 0.5; }
+    </style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div class="top-bar">
+    <span class="brand"><i class="bi bi-mortarboard-fill me-2"></i>Penawaran Kelas</span>
+</div>
+
+<!-- Token bar -->
+<div class="token-bar">
+    <label class="small fw-semibold text-muted mb-0 text-nowrap">JWT Token:</label>
+    <input type="password" id="tokenInput" class="form-control form-control-sm" style="max-width:380px"
+           placeholder="Paste token di sini...">
+    <button class="btn btn-sm btn-primary" onclick="setToken()">Set</button>
+    <span id="tokenStatus" class="small ms-1"></span>
+</div>
+
+<!-- Content -->
+<div class="container-fluid py-4 px-4">
+
+    <!-- Main tabs -->
+    <ul class="nav nav-pills mb-4" id="mainTabs">
+        <li class="nav-item">
+            <a class="nav-link active" href="#" onclick="switchTab('ruang'); return false;">
+                <i class="bi bi-door-open me-1"></i>Ruang
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="#" onclick="switchTab('kelas'); return false;">
+                <i class="bi bi-journal-bookmark me-1"></i>Kelas
+            </a>
+        </li>
+    </ul>
+
+    <!-- ── RUANG TAB ───────────────────────────────────────────────────── -->
+    <div id="tab-ruang">
+        <div class="card-panel">
+            <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+                <select id="f-ruang-tipe" class="form-select form-select-sm" style="width:130px" onchange="loadRuang()">
+                    <option value="">Semua Tipe</option>
+                    <option value="kelas">Kelas</option>
+                    <option value="lab">Lab</option>
+                    <option value="aula">Aula</option>
+                </select>
+                <input id="f-ruang-gedung" type="text" class="form-control form-control-sm" style="width:150px"
+                       placeholder="Gedung..." oninput="loadRuang()">
+                <select id="f-ruang-status" class="form-select form-select-sm" style="width:130px" onchange="loadRuang()">
+                    <option value="">Semua Status</option>
+                    <option value="tersedia">Tersedia</option>
+                    <option value="nonaktif">Nonaktif</option>
+                </select>
+                <button class="btn btn-sm btn-outline-secondary" onclick="loadRuang()">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
+                <button class="btn btn-sm btn-primary ms-auto" onclick="openRuangModal()">
+                    <i class="bi bi-plus-lg me-1"></i>Tambah Ruang
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Kode</th><th>Nama</th><th>Tipe</th>
+                            <th>Kapasitas</th><th>Gedung</th><th>Status</th><th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ruang-tbody">
+                        <tr><td colspan="7" class="text-center text-muted py-4">Memuat...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── KELAS TAB ───────────────────────────────────────────────────── -->
+    <div id="tab-kelas" style="display:none">
+
+        <!-- List view -->
+        <div id="kelas-list">
+            <div class="card-panel">
+                <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+                    <input id="f-kelas-semester" type="number" class="form-control form-control-sm"
+                           style="width:150px" placeholder="Semester ID...">
+                    <input id="f-kelas-unit" type="number" class="form-control form-control-sm"
+                           style="width:130px" placeholder="Unit ID...">
+                    <button class="btn btn-sm btn-outline-secondary" onclick="loadKelas()">
+                        <i class="bi bi-search me-1"></i>Filter
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="loadKelas(true)">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                    <button class="btn btn-sm btn-primary ms-auto" onclick="openKelasModal()">
+                        <i class="bi bi-plus-lg me-1"></i>Tambah Kelas
+                    </button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Kode Kelas</th><th>Course ID</th><th>Semester ID</th>
+                                <th>Kuota</th><th>Terisi</th><th>Sisa</th>
+                                <th>Ruang Ujian</th><th>Status</th><th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="kelas-tbody">
+                            <tr><td colspan="9" class="text-center text-muted py-4">
+                                Masukkan filter dan klik Filter, atau klik <i class="bi bi-arrow-clockwise"></i> untuk semua kelas
+                            </td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detail view -->
+        <div id="kelas-detail" style="display:none">
+            <button class="btn btn-sm btn-outline-secondary mb-3" onclick="backToKelas()">
+                <i class="bi bi-arrow-left me-1"></i>Kembali
+            </button>
+
+            <div class="detail-header mb-4">
+                <div class="d-flex align-items-start justify-content-between">
+                    <div>
+                        <h5 class="mb-1 fw-bold" id="detail-kode">—</h5>
+                        <div class="small opacity-80" id="detail-info">—</div>
+                    </div>
+                    <button class="btn btn-sm btn-light" onclick="openKelasModalFromDetail()">
+                        <i class="bi bi-pencil me-1"></i>Edit
+                    </button>
+                </div>
+            </div>
+
+            <div class="row g-4">
+                <!-- Dosen -->
+                <div class="col-12 col-lg-5">
+                    <div class="card-panel h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-bold mb-0"><i class="bi bi-person-badge me-2 text-primary"></i>Dosen</h6>
+                            <button class="btn btn-sm btn-primary" onclick="openDosenModal()">
+                                <i class="bi bi-plus-lg me-1"></i>Tambah
+                            </button>
+                        </div>
+                        <table class="table table-sm align-middle mb-0">
+                            <thead><tr><th>Lecturer ID</th><th>Peran</th><th></th></tr></thead>
+                            <tbody id="dosen-tbody">
+                                <tr><td colspan="3" class="text-center text-muted py-3">Memuat...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Jadwal -->
+                <div class="col-12 col-lg-7">
+                    <div class="card-panel h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-bold mb-0"><i class="bi bi-calendar3 me-2 text-primary"></i>Jadwal</h6>
+                            <button class="btn btn-sm btn-primary" onclick="openJadwalModal()">
+                                <i class="bi bi-plus-lg me-1"></i>Tambah
+                            </button>
+                        </div>
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr><th>Tipe</th><th>Hari / Tanggal</th><th>Jam</th><th>Ruang</th><th>Status</th><th></th></tr>
+                            </thead>
+                            <tbody id="jadwal-tbody">
+                                <tr><td colspan="6" class="text-center text-muted py-3">Memuat...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- ── MODAL: Ruang ─────────────────────────────────────────────────────── -->
+<div class="modal fade" id="modalRuang" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalRuangTitle">Tambah Ruang</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="r-id">
+                <div class="row g-3">
+                    <div class="col-6">
+                        <label class="form-label">Kode Ruang <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="r-kode" placeholder="e.g. P-203">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Nama Ruang</label>
+                        <input type="text" class="form-control" id="r-nama" placeholder="e.g. Ruang Kelas P203">
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label">Tipe</label>
+                        <select class="form-select" id="r-tipe">
+                            <option value="kelas">Kelas</option>
+                            <option value="lab">Lab</option>
+                            <option value="aula">Aula</option>
+                        </select>
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label">Kapasitas</label>
+                        <input type="number" class="form-control" id="r-kapasitas" value="40" min="0">
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label">Status</label>
+                        <select class="form-select" id="r-status">
+                            <option value="tersedia">Tersedia</option>
+                            <option value="nonaktif">Nonaktif</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Gedung</label>
+                        <input type="text" class="form-control" id="r-gedung" placeholder="e.g. Gedung P">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                <button class="btn btn-primary" onclick="saveRuang()">Simpan</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── MODAL: Kelas ─────────────────────────────────────────────────────── -->
+<div class="modal fade" id="modalKelas" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalKelasTitle">Tambah Kelas</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="k-id">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label">Kode Kelas <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="k-kode" placeholder="e.g. IF301-A">
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label">Course ID <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="k-course" min="1">
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label">Semester ID <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="k-semester" min="1">
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label">Unit ID <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="k-unit" min="1">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Kuota</label>
+                        <input type="number" class="form-control" id="k-kuota" value="30" min="0">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Ruang Ujian ID <span class="text-muted small">(opsional)</span></label>
+                        <input type="number" class="form-control" id="k-ruang-ujian" placeholder="—" min="1">
+                    </div>
+                    <div class="col-12" id="k-status-group">
+                        <label class="form-label">Status</label>
+                        <select class="form-select" id="k-status">
+                            <option value="aktif">Aktif</option>
+                            <option value="nonaktif">Nonaktif</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                <button class="btn btn-primary" onclick="saveKelas()">Simpan</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── MODAL: Dosen ─────────────────────────────────────────────────────── -->
+<div class="modal fade" id="modalDosen" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Tambah Dosen</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Lecturer ID <span class="text-danger">*</span></label>
+                    <input type="number" class="form-control" id="d-lecturer-id" min="1">
+                </div>
+                <div>
+                    <label class="form-label">Peran</label>
+                    <select class="form-select" id="d-peran">
+                        <option value="pengampu">Pengampu</option>
+                        <option value="asisten">Asisten</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                <button class="btn btn-primary" onclick="saveDosen()">Tambah</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── MODAL: Jadwal ────────────────────────────────────────────────────── -->
+<div class="modal fade" id="modalJadwal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Tambah Jadwal</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label">Tipe</label>
+                        <select class="form-select" id="j-tipe" onchange="toggleJadwalFields()">
+                            <option value="kuliah">Kuliah (mingguan)</option>
+                            <option value="uts">UTS</option>
+                            <option value="uas">UAS</option>
+                        </select>
+                    </div>
+                    <div class="col-12" id="j-hari-group">
+                        <label class="form-label">Hari <span class="text-danger">*</span></label>
+                        <select class="form-select" id="j-hari">
+                            <option value="">— pilih hari —</option>
+                            <option>Senin</option><option>Selasa</option><option>Rabu</option>
+                            <option>Kamis</option><option>Jumat</option><option>Sabtu</option>
+                        </select>
+                    </div>
+                    <div class="col-12" id="j-tanggal-group" style="display:none">
+                        <label class="form-label">Tanggal <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" id="j-tanggal">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Jam Mulai <span class="text-danger">*</span></label>
+                        <input type="time" class="form-control" id="j-jam-mulai">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Jam Selesai <span class="text-danger">*</span></label>
+                        <input type="time" class="form-control" id="j-jam-selesai">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">
+                            Ruang ID
+                            <span class="text-muted small" id="j-ruang-hint">
+                                — opsional untuk UTS/UAS jika sudah diset di kelas
+                            </span>
+                        </label>
+                        <input type="number" class="form-control" id="j-ruang-id" placeholder="Opsional" min="1">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                <button class="btn btn-primary" onclick="saveJadwal()">Simpan</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let token         = localStorage.getItem('jwt_token') || '';
+let currentKelasId   = null;
+let currentKelasData = null;
+let editingRuangId   = null;
+let editingKelasId   = null;
+
+// Bootstrap modals
+const mRuang  = new bootstrap.Modal('#modalRuang');
+const mKelas  = new bootstrap.Modal('#modalKelas');
+const mDosen  = new bootstrap.Modal('#modalDosen');
+const mJadwal = new bootstrap.Modal('#modalJadwal');
+
+// ── Init ───────────────────────────────────────────────────────────────────
+if (token) {
+    document.getElementById('tokenInput').value = token;
+    document.getElementById('tokenStatus').textContent = 'Token aktif ✓';
+    document.getElementById('tokenStatus').className = 'small text-success';
+}
+loadRuang();
+
+// ── Token ──────────────────────────────────────────────────────────────────
+function setToken() {
+    token = document.getElementById('tokenInput').value.trim();
+    localStorage.setItem('jwt_token', token);
+    const st = document.getElementById('tokenStatus');
+    st.textContent = token ? 'Token disimpan ✓' : 'Token dihapus';
+    st.className   = token ? 'small text-success' : 'small text-muted';
+}
+
+// ── API ────────────────────────────────────────────────────────────────────
+async function api(method, path, body = null) {
+    try {
+        const opts = {
+            method,
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+        };
+        if (body) opts.body = JSON.stringify(body);
+        const res = await fetch(path, opts);
+        return await res.json();
+    } catch (e) {
+        return { status: 'error', message: e.message };
+    }
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+function toast(msg, type = 'success') {
+    const id  = 'toast-' + Date.now();
+    const cls = type === 'success' ? 'text-bg-success' : 'text-bg-danger';
+    document.getElementById('toastContainer').insertAdjacentHTML('beforeend', `
+        <div id="${id}" class="toast align-items-center ${cls} border-0 show">
+            <div class="d-flex">
+                <div class="toast-body">${msg}</div>
+                <button class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    `);
+    setTimeout(() => document.getElementById(id)?.remove(), 3500);
+}
+
+// ── Tab navigation ─────────────────────────────────────────────────────────
+function switchTab(tab) {
+    document.getElementById('tab-ruang').style.display  = tab === 'ruang'  ? '' : 'none';
+    document.getElementById('tab-kelas').style.display  = tab === 'kelas'  ? '' : 'none';
+    document.querySelectorAll('#mainTabs .nav-link').forEach((el, i) => {
+        el.classList.toggle('active', (tab === 'ruang' && i === 0) || (tab === 'kelas' && i === 1));
+    });
+    if (tab === 'ruang') loadRuang();
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// RUANG
+// ══════════════════════════════════════════════════════════════════════════
+
+async function loadRuang() {
+    const tipe   = document.getElementById('f-ruang-tipe').value;
+    const gedung = document.getElementById('f-ruang-gedung').value;
+    const status = document.getElementById('f-ruang-status').value;
+    let path = '/penawaran/ruang?';
+    if (tipe)   path += `tipe=${encodeURIComponent(tipe)}&`;
+    if (gedung) path += `gedung=${encodeURIComponent(gedung)}&`;
+    if (status) path += `status=${encodeURIComponent(status)}&`;
+
+    const data = await api('GET', path);
+    const tbody = document.getElementById('ruang-tbody');
+
+    if (!Array.isArray(data)) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">${data?.message || 'Gagal memuat'}</td></tr>`;
+        return;
+    }
+    if (!data.length) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4">Tidak ada ruang ditemukan</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = data.map(r => `
+        <tr>
+            <td><strong>${esc(r.kode_ruang)}</strong></td>
+            <td>${esc(r.nama_ruang || '—')}</td>
+            <td><span class="badge bg-secondary">${r.tipe}</span></td>
+            <td>${r.kapasitas}</td>
+            <td>${esc(r.gedung || '—')}</td>
+            <td><span class="badge ${r.status === 'tersedia' ? 'badge-tersedia' : 'badge-nonaktif'}">${r.status}</span></td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary btn-icon me-1" title="Edit"
+                        onclick='openRuangModal(${JSON.stringify(r)})'>
+                    <i class="bi bi-pencil"></i>
+                </button>
+                ${r.status === 'tersedia' ? `
+                <button class="btn btn-sm btn-outline-danger btn-icon" title="Nonaktifkan"
+                        onclick="hapusRuang(${r.ruang_id})">
+                    <i class="bi bi-dash-circle"></i>
+                </button>` : ''}
+            </td>
+        </tr>
+    `).join('');
+}
+
+function openRuangModal(ruang = null) {
+    editingRuangId = ruang?.ruang_id || null;
+    document.getElementById('modalRuangTitle').textContent = ruang ? 'Edit Ruang' : 'Tambah Ruang';
+    document.getElementById('r-kode').value      = ruang?.kode_ruang  || '';
+    document.getElementById('r-nama').value      = ruang?.nama_ruang  || '';
+    document.getElementById('r-tipe').value      = ruang?.tipe        || 'kelas';
+    document.getElementById('r-kapasitas').value = ruang?.kapasitas   ?? 40;
+    document.getElementById('r-gedung').value    = ruang?.gedung      || '';
+    document.getElementById('r-status').value    = ruang?.status      || 'tersedia';
+    document.getElementById('r-kode').disabled   = !!ruang;
+    mRuang.show();
+}
+
+async function saveRuang() {
+    const body = {
+        kode_ruang: document.getElementById('r-kode').value.trim(),
+        nama_ruang: document.getElementById('r-nama').value.trim(),
+        tipe:       document.getElementById('r-tipe').value,
+        kapasitas:  parseInt(document.getElementById('r-kapasitas').value) || 0,
+        gedung:     document.getElementById('r-gedung').value.trim(),
+        status:     document.getElementById('r-status').value,
+    };
+    if (!editingRuangId && !body.kode_ruang) { toast('Kode ruang wajib diisi', 'error'); return; }
+
+    const res = editingRuangId
+        ? await api('PUT',  `/penawaran/ruang/${editingRuangId}`, body)
+        : await api('POST', '/penawaran/ruang', body);
+
+    if (res?.status === 'error') { toast(res.message, 'error'); return; }
+    mRuang.hide();
+    toast(editingRuangId ? 'Ruang berhasil diupdate' : 'Ruang berhasil ditambahkan');
+    loadRuang();
+}
+
+async function hapusRuang(id) {
+    if (!confirm('Nonaktifkan ruang ini?')) return;
+    const res = await api('DELETE', `/penawaran/ruang/${id}`);
+    if (res?.status === 'error') { toast(res.message, 'error'); return; }
+    toast('Ruang dinonaktifkan');
+    loadRuang();
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// KELAS
+// ══════════════════════════════════════════════════════════════════════════
+
+async function loadKelas(reset = false) {
+    if (reset) {
+        document.getElementById('f-kelas-semester').value = '';
+        document.getElementById('f-kelas-unit').value = '';
+    }
+    const semId  = document.getElementById('f-kelas-semester').value;
+    const unitId = document.getElementById('f-kelas-unit').value;
+    let path = '/penawaran/kelas?';
+    if (semId)  path += `semester_id=${semId}&`;
+    if (unitId) path += `unit_id=${unitId}&`;
+
+    const data = await api('GET', path);
+    const tbody = document.getElementById('kelas-tbody');
+
+    if (!Array.isArray(data)) {
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center text-danger py-4">${data?.message || 'Gagal memuat'}</td></tr>`;
+        return;
+    }
+    if (!data.length) {
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted py-4">Tidak ada kelas ditemukan</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = data.map(k => `
+        <tr>
+            <td><strong>${esc(k.kode_kelas)}</strong></td>
+            <td>${k.course_id}</td>
+            <td>${k.semester_id}</td>
+            <td>${k.kuota}</td>
+            <td>${k.jumlah_terisi}</td>
+            <td>${k.kuota - k.jumlah_terisi}</td>
+            <td>${k.ruang_ujian_id || '—'}</td>
+            <td><span class="badge ${k.status === 'aktif' ? 'badge-aktif' : 'badge-nonaktif'}">${k.status}</span></td>
+            <td>
+                <button class="btn btn-sm btn-primary btn-icon me-1" title="Lihat Detail"
+                        onclick="openKelasDetail(${k.kelas_id})">
+                    <i class="bi bi-eye"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-primary btn-icon me-1" title="Edit"
+                        onclick='openKelasModal(${JSON.stringify(k)})'>
+                    <i class="bi bi-pencil"></i>
+                </button>
+                ${k.status === 'aktif' ? `
+                <button class="btn btn-sm btn-outline-danger btn-icon" title="Nonaktifkan"
+                        onclick="nonaktifkanKelas(${k.kelas_id})">
+                    <i class="bi bi-dash-circle"></i>
+                </button>` : ''}
+            </td>
+        </tr>
+    `).join('');
+}
+
+function openKelasModal(kelas = null) {
+    editingKelasId = kelas?.kelas_id || null;
+    document.getElementById('modalKelasTitle').textContent = kelas ? 'Edit Kelas' : 'Tambah Kelas';
+    document.getElementById('k-kode').value        = kelas?.kode_kelas    || '';
+    document.getElementById('k-course').value      = kelas?.course_id     || '';
+    document.getElementById('k-semester').value    = kelas?.semester_id   || '';
+    document.getElementById('k-unit').value        = kelas?.unit_id       || '';
+    document.getElementById('k-kuota').value       = kelas?.kuota         ?? 30;
+    document.getElementById('k-ruang-ujian').value = kelas?.ruang_ujian_id || '';
+    document.getElementById('k-status').value      = kelas?.status        || 'aktif';
+    document.getElementById('k-kode').disabled     = !!kelas;
+
+    // hide course/semester/unit when editing (can't change)
+    ['k-course', 'k-semester', 'k-unit'].forEach(id => {
+        document.getElementById(id).closest('.col-4').style.display = kelas ? 'none' : '';
+    });
+    mKelas.show();
+}
+
+function openKelasModalFromDetail() {
+    openKelasModal(currentKelasData);
+}
+
+async function saveKelas() {
+    const isEdit = !!editingKelasId;
+    const body = isEdit ? {
+        kuota:          parseInt(document.getElementById('k-kuota').value) || 0,
+        ruang_ujian_id: parseInt(document.getElementById('k-ruang-ujian').value) || null,
+        status:         document.getElementById('k-status').value,
+    } : {
+        kode_kelas:    document.getElementById('k-kode').value.trim(),
+        course_id:     parseInt(document.getElementById('k-course').value),
+        semester_id:   parseInt(document.getElementById('k-semester').value),
+        unit_id:       parseInt(document.getElementById('k-unit').value),
+        kuota:         parseInt(document.getElementById('k-kuota').value) || 0,
+        ruang_ujian_id: parseInt(document.getElementById('k-ruang-ujian').value) || null,
+    };
+
+    if (!isEdit && (!body.kode_kelas || !body.course_id || !body.semester_id || !body.unit_id)) {
+        toast('Kode, Course ID, Semester ID, dan Unit ID wajib diisi', 'error');
+        return;
+    }
+
+    const res = isEdit
+        ? await api('PUT',  `/penawaran/kelas/${editingKelasId}`, body)
+        : await api('POST', '/penawaran/kelas', body);
+
+    if (res?.status === 'error') { toast(res.message, 'error'); return; }
+    mKelas.hide();
+    toast(isEdit ? 'Kelas berhasil diupdate' : 'Kelas berhasil ditambahkan');
+
+    if (isEdit && currentKelasId === editingKelasId) {
+        openKelasDetail(currentKelasId); // refresh detail
+    } else {
+        loadKelas();
+    }
+}
+
+async function nonaktifkanKelas(id) {
+    if (!confirm('Nonaktifkan kelas ini?')) return;
+    const res = await api('DELETE', `/penawaran/kelas/${id}`);
+    if (res?.status === 'error') { toast(res.message, 'error'); return; }
+    toast('Kelas dinonaktifkan');
+    loadKelas();
+}
+
+// ── Kelas Detail ────────────────────────────────────────────────────────────
+
+async function openKelasDetail(kelasId) {
+    currentKelasId = kelasId;
+    document.getElementById('kelas-list').style.display   = 'none';
+    document.getElementById('kelas-detail').style.display = '';
+
+    const kelas = await api('GET', `/penawaran/kelas/${kelasId}`);
+    currentKelasData = kelas;
+    document.getElementById('detail-kode').textContent = kelas.kode_kelas || '—';
+    document.getElementById('detail-info').textContent =
+        `Course ID: ${kelas.course_id}  |  Semester ID: ${kelas.semester_id}  |  ` +
+        `Kuota: ${kelas.kuota}  |  Terisi: ${kelas.jumlah_terisi}  |  ` +
+        `Ruang Ujian: ${kelas.ruang_ujian_id || '—'}  |  Status: ${kelas.status}`;
+
+    await Promise.all([
+        loadDosenByKelas(kelasId),
+        loadJadwalByKelas(kelasId),
+    ]);
+}
+
+function backToKelas() {
+    currentKelasId   = null;
+    currentKelasData = null;
+    document.getElementById('kelas-list').style.display   = '';
+    document.getElementById('kelas-detail').style.display = 'none';
+}
+
+// ── Dosen ───────────────────────────────────────────────────────────────────
+
+async function loadDosenByKelas(kelasId) {
+    const data = await api('GET', `/penawaran/kelas/${kelasId}/dosen`);
+    const tbody = document.getElementById('dosen-tbody');
+    if (!Array.isArray(data) || !data.length) {
+        tbody.innerHTML = `<tr><td colspan="3" class="text-center text-muted py-3">Belum ada dosen</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = data.map(d => `
+        <tr>
+            <td>${d.lecturer_id}</td>
+            <td><span class="badge bg-secondary">${d.peran}</span></td>
+            <td>
+                <button class="btn btn-sm btn-outline-danger btn-icon" onclick="removeDosen(${d.kelas_dosen_id})">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function openDosenModal() {
+    document.getElementById('d-lecturer-id').value = '';
+    document.getElementById('d-peran').value = 'pengampu';
+    mDosen.show();
+}
+
+async function saveDosen() {
+    const lid = parseInt(document.getElementById('d-lecturer-id').value);
+    if (!lid) { toast('Lecturer ID wajib diisi', 'error'); return; }
+    const res = await api('POST', `/penawaran/kelas/${currentKelasId}/dosen`, {
+        lecturer_id: lid,
+        peran: document.getElementById('d-peran').value,
+    });
+    if (res?.status === 'error') { toast(res.message, 'error'); return; }
+    mDosen.hide();
+    toast('Dosen ditambahkan');
+    loadDosenByKelas(currentKelasId);
+}
+
+async function removeDosen(kelas_dosen_id) {
+    if (!confirm('Hapus dosen dari kelas ini?')) return;
+    const res = await api('DELETE', `/penawaran/kelas/dosen/${kelas_dosen_id}`);
+    if (res?.status === 'error') { toast(res.message, 'error'); return; }
+    toast('Dosen dihapus');
+    loadDosenByKelas(currentKelasId);
+}
+
+// ── Jadwal ──────────────────────────────────────────────────────────────────
+
+async function loadJadwalByKelas(kelasId) {
+    const data = await api('GET', `/penawaran/kelas/${kelasId}/jadwal`);
+    const tbody = document.getElementById('jadwal-tbody');
+    if (!Array.isArray(data) || !data.length) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-3">Belum ada jadwal</td></tr>`;
+        return;
+    }
+    const tipeCls = { kuliah: 'bg-primary', uts: 'bg-warning text-dark', uas: 'bg-danger' };
+    tbody.innerHTML = data.map(j => `
+        <tr class="${j.is_outdated ? 'outdated-row' : ''}">
+            <td><span class="badge ${tipeCls[j.tipe] || 'bg-secondary'}">${j.tipe.toUpperCase()}</span></td>
+            <td>${esc(j.hari || j.tanggal || '—')}</td>
+            <td class="text-nowrap">${j.jam_mulai?.slice(0,5)} – ${j.jam_selesai?.slice(0,5)}</td>
+            <td>${j.ruang_id || '—'}</td>
+            <td>
+                ${j.is_outdated
+                    ? '<span class="badge badge-nonaktif">Nonaktif</span>'
+                    : '<span class="badge badge-tersedia">Aktif</span>'}
+            </td>
+            <td>
+                ${!j.is_outdated ? `
+                <button class="btn btn-sm btn-outline-danger btn-icon" onclick="hapusJadwal(${j.jadwal_id})">
+                    <i class="bi bi-dash-circle"></i>
+                </button>` : ''}
+            </td>
+        </tr>
+    `).join('');
+}
+
+function openJadwalModal() {
+    document.getElementById('j-tipe').value      = 'kuliah';
+    document.getElementById('j-hari').value      = '';
+    document.getElementById('j-tanggal').value   = '';
+    document.getElementById('j-jam-mulai').value = '';
+    document.getElementById('j-jam-selesai').value = '';
+    document.getElementById('j-ruang-id').value  = '';
+    toggleJadwalFields();
+    mJadwal.show();
+}
+
+function toggleJadwalFields() {
+    const isKuliah = document.getElementById('j-tipe').value === 'kuliah';
+    document.getElementById('j-hari-group').style.display    = isKuliah ? '' : 'none';
+    document.getElementById('j-tanggal-group').style.display = isKuliah ? 'none' : '';
+}
+
+async function saveJadwal() {
+    const tipe = document.getElementById('j-tipe').value;
+    const jamMulai   = document.getElementById('j-jam-mulai').value;
+    const jamSelesai = document.getElementById('j-jam-selesai').value;
+    if (!jamMulai || !jamSelesai) { toast('Jam mulai dan selesai wajib diisi', 'error'); return; }
+
+    const body = { tipe, jam_mulai: jamMulai, jam_selesai: jamSelesai };
+
+    if (tipe === 'kuliah') {
+        const hari = document.getElementById('j-hari').value;
+        if (!hari) { toast('Hari wajib dipilih untuk jadwal kuliah', 'error'); return; }
+        body.hari = hari;
+    } else {
+        const tanggal = document.getElementById('j-tanggal').value;
+        if (!tanggal) { toast('Tanggal wajib diisi untuk UTS/UAS', 'error'); return; }
+        body.tanggal = tanggal;
+    }
+    const ruangId = parseInt(document.getElementById('j-ruang-id').value);
+    if (ruangId) body.ruang_id = ruangId;
+
+    const res = await api('POST', `/penawaran/kelas/${currentKelasId}/jadwal`, body);
+    if (res?.status === 'error') { toast(res.message, 'error'); return; }
+    mJadwal.hide();
+    toast('Jadwal ditambahkan');
+    loadJadwalByKelas(currentKelasId);
+}
+
+async function hapusJadwal(jadwal_id) {
+    if (!confirm('Nonaktifkan jadwal ini?')) return;
+    const res = await api('DELETE', `/penawaran/jadwal/${jadwal_id}`);
+    if (res?.status === 'error') { toast(res.message, 'error'); return; }
+    toast('Jadwal dinonaktifkan');
+    loadJadwalByKelas(currentKelasId);
+}
+
+// ── Utility ────────────────────────────────────────────────────────────────
+function esc(str) {
+    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>

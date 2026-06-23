@@ -5,11 +5,18 @@ from nameko.web.handlers import http
 from nameko.rpc import RpcProxy
 from werkzeug.wrappers import Response
 
+_UI_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ui', 'index.html')
+
 
 class GatewayService:
     name = "penawaran_gateway"
 
     penawaran_kelas = RpcProxy("penawaran_kelas")
+
+    @http('GET', '/')
+    def ui(self, request):
+        with open(_UI_PATH, 'r', encoding='utf-8') as f:
+            return Response(f.read(), mimetype='text/html')
 
     def check_jwt(self, request):
         auth_header = request.headers.get('Authorization')
