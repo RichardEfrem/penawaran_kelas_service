@@ -10,6 +10,32 @@ class PenawaranKelasService:
     db = DatabaseSession(Base)
     master_rpc = RpcProxy("master_service")
 
+    # ---------- Auth proxy ----------
+    @rpc
+    def master_login(self, username, password):
+        return self.master_rpc.login(username=username, password=password)
+
+    # ---------- Master data proxy (untuk UI dropdown) ----------
+    @rpc
+    def get_master_semesters(self):
+        return self.master_rpc.get_all_semesters()
+
+    @rpc
+    def get_master_units(self):
+        return self.master_rpc.get_all_units()
+
+    @rpc
+    def get_master_courses(self):
+        return self.master_rpc.get_all_courses()
+
+    @rpc
+    def get_master_lecturers(self):
+        return self.master_rpc.get_all_lecturers()
+
+    @rpc
+    def get_master_curriculums(self):
+        return self.master_rpc.get_all_curriculums()
+
     # ---------- A. Manajemen Kelas ----------
     @rpc
     def create_kelas(self, data):
@@ -258,6 +284,31 @@ class PenawaranKelasService:
         return [
             {
                 "jadwal_id": r.jadwal_id,
+                "tipe": r.tipe,
+                "hari": r.hari,
+                "tanggal": str(r.tanggal) if r.tanggal else None,
+                "jam_mulai": str(r.jam_mulai),
+                "jam_selesai": str(r.jam_selesai),
+                "ruang_id": r.ruang_id,
+                "is_outdated": r.is_outdated,
+            }
+            for r in rows
+        ]
+
+    @rpc
+    def list_jadwal(self, kelas_id=None, tipe=None, is_outdated=None):
+        q = self.db.query(Jadwal)
+        if kelas_id is not None:
+            q = q.filter(Jadwal.kelas_id == kelas_id)
+        if tipe:
+            q = q.filter(Jadwal.tipe == tipe)
+        if is_outdated is not None:
+            q = q.filter(Jadwal.is_outdated == is_outdated)
+        rows = q.order_by(Jadwal.kelas_id, Jadwal.tipe).all()
+        return [
+            {
+                "jadwal_id": r.jadwal_id,
+                "kelas_id": r.kelas_id,
                 "tipe": r.tipe,
                 "hari": r.hari,
                 "tanggal": str(r.tanggal) if r.tanggal else None,

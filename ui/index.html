@@ -72,12 +72,9 @@
 </div>
 
 <!-- Token bar -->
-<div class="token-bar">
-    <label class="small fw-semibold text-muted mb-0 text-nowrap">JWT Token:</label>
-    <input type="password" id="tokenInput" class="form-control form-control-sm" style="max-width:380px"
-           placeholder="Paste token di sini...">
-    <button class="btn btn-sm btn-primary" onclick="setToken()">Set</button>
-    <span id="tokenStatus" class="small ms-1"></span>
+<div class="token-bar" id="loginBar">
+    <span id="tokenStatus" class="small ms-2"></span>
+    <button id="btnLogout" class="btn btn-sm btn-outline-danger ms-auto d-none" onclick="doLogout()">Logout</button>
 </div>
 
 <!-- Content -->
@@ -93,6 +90,11 @@
         <li class="nav-item">
             <a class="nav-link" href="#" onclick="switchTab('kelas'); return false;">
                 <i class="bi bi-journal-bookmark me-1"></i>Kelas
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="#" onclick="switchTab('jadwal'); return false;">
+                <i class="bi bi-calendar3 me-1"></i>Jadwal
             </a>
         </li>
     </ul>
@@ -144,10 +146,12 @@
         <div id="kelas-list">
             <div class="card-panel">
                 <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
-                    <input id="f-kelas-semester" type="number" class="form-control form-control-sm"
-                           style="width:150px" placeholder="Semester ID...">
-                    <input id="f-kelas-unit" type="number" class="form-control form-control-sm"
-                           style="width:130px" placeholder="Unit ID...">
+                    <select id="f-kelas-semester" class="form-select form-select-sm" style="width:200px">
+                        <option value="">Semua Semester</option>
+                    </select>
+                    <select id="f-kelas-unit" class="form-select form-select-sm" style="width:180px">
+                        <option value="">Semua Unit</option>
+                    </select>
                     <button class="btn btn-sm btn-outline-secondary" onclick="loadKelas()">
                         <i class="bi bi-search me-1"></i>Filter
                     </button>
@@ -162,7 +166,7 @@
                     <table class="table table-hover align-middle mb-0">
                         <thead>
                             <tr>
-                                <th>Kode Kelas</th><th>Course ID</th><th>Semester ID</th>
+                                <th>Kode Kelas</th><th>Mata Kuliah</th><th>Semester</th>
                                 <th>Kuota</th><th>Terisi</th><th>Sisa</th>
                                 <th>Ruang Ujian</th><th>Status</th><th>Aksi</th>
                             </tr>
@@ -237,6 +241,56 @@
         </div>
     </div>
 
+    <!-- ── JADWAL TAB ────────────────────────────────────────────────────── -->
+    <div id="tab-jadwal" style="display:none">
+        <div class="card-panel">
+            <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+                <select id="f-jadwal-kelas" class="form-select form-select-sm" style="width:200px">
+                    <option value="">Semua Kelas</option>
+                </select>
+                <select id="f-jadwal-tipe" class="form-select form-select-sm" style="width:130px">
+                    <option value="">Semua Tipe</option>
+                    <option value="kuliah">Kuliah</option>
+                    <option value="uts">UTS</option>
+                    <option value="uas">UAS</option>
+                </select>
+                <select id="f-jadwal-status" class="form-select form-select-sm" style="width:140px">
+                    <option value="">Semua Status</option>
+                    <option value="false">Aktif</option>
+                    <option value="true">Nonaktif</option>
+                </select>
+                <button class="btn btn-sm btn-outline-secondary" onclick="loadJadwal()">
+                    <i class="bi bi-search me-1"></i>Cari
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="loadJadwal(true)">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
+                <span id="jadwal-count" class="small text-muted ms-2"></span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Jadwal ID</th>
+                            <th>Kelas ID</th>
+                            <th>Tipe</th>
+                            <th>Hari / Tanggal</th>
+                            <th>Jam</th>
+                            <th>Ruang ID</th>
+                            <th>Status</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="jadwal-all-tbody">
+                        <tr><td colspan="8" class="text-center text-muted py-4">
+                            Gunakan filter di atas lalu klik <strong>Cari</strong>, atau klik <i class="bi bi-arrow-clockwise"></i> untuk semua jadwal
+                        </td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <!-- ── MODAL: Ruang ─────────────────────────────────────────────────────── -->
@@ -306,25 +360,39 @@
                         <label class="form-label">Kode Kelas <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="k-kode" placeholder="e.g. IF301-A">
                     </div>
-                    <div class="col-4">
-                        <label class="form-label">Course ID <span class="text-danger">*</span></label>
-                        <input type="number" class="form-control" id="k-course" min="1">
+                    <div class="col-12" id="k-course-group">
+                        <label class="form-label">Mata Kuliah <span class="text-danger">*</span></label>
+                        <select class="form-select" id="k-course">
+                            <option value="">— pilih mata kuliah —</option>
+                        </select>
                     </div>
-                    <div class="col-4">
-                        <label class="form-label">Semester ID <span class="text-danger">*</span></label>
-                        <input type="number" class="form-control" id="k-semester" min="1">
+                    <div class="col-6" id="k-semester-group">
+                        <label class="form-label">Semester <span class="text-danger">*</span></label>
+                        <select class="form-select" id="k-semester">
+                            <option value="">— pilih semester —</option>
+                        </select>
                     </div>
-                    <div class="col-4">
-                        <label class="form-label">Unit ID <span class="text-danger">*</span></label>
-                        <input type="number" class="form-control" id="k-unit" min="1">
+                    <div class="col-6" id="k-unit-group">
+                        <label class="form-label">Unit / Prodi <span class="text-danger">*</span></label>
+                        <select class="form-select" id="k-unit">
+                            <option value="">— pilih unit —</option>
+                        </select>
+                    </div>
+                    <div class="col-12" id="k-curriculum-group">
+                        <label class="form-label">Kurikulum <span class="text-muted small">(opsional)</span></label>
+                        <select class="form-select" id="k-curriculum">
+                            <option value="">— pilih kurikulum —</option>
+                        </select>
                     </div>
                     <div class="col-6">
                         <label class="form-label">Kuota</label>
                         <input type="number" class="form-control" id="k-kuota" value="30" min="0">
                     </div>
                     <div class="col-6">
-                        <label class="form-label">Ruang Ujian ID <span class="text-muted small">(opsional)</span></label>
-                        <input type="number" class="form-control" id="k-ruang-ujian" placeholder="—" min="1">
+                        <label class="form-label">Ruang Ujian <span class="text-muted small">(opsional)</span></label>
+                        <select class="form-select" id="k-ruang-ujian">
+                            <option value="">— tidak ada —</option>
+                        </select>
                     </div>
                     <div class="col-12" id="k-status-group">
                         <label class="form-label">Status</label>
@@ -353,8 +421,10 @@
             </div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <label class="form-label">Lecturer ID <span class="text-danger">*</span></label>
-                    <input type="number" class="form-control" id="d-lecturer-id" min="1">
+                    <label class="form-label">Dosen <span class="text-danger">*</span></label>
+                    <select class="form-select" id="d-lecturer-id">
+                        <option value="">— pilih dosen —</option>
+                    </select>
                 </div>
                 <div>
                     <label class="form-label">Peran</label>
@@ -412,12 +482,14 @@
                     </div>
                     <div class="col-12">
                         <label class="form-label">
-                            Ruang ID
+                            Ruang
                             <span class="text-muted small" id="j-ruang-hint">
                                 — opsional untuk UTS/UAS jika sudah diset di kelas
                             </span>
                         </label>
-                        <input type="number" class="form-control" id="j-ruang-id" placeholder="Opsional" min="1">
+                        <select class="form-select" id="j-ruang-id">
+                            <option value="">— pilih ruang (opsional) —</option>
+                        </select>
                     </div>
                 </div>
             </div>
@@ -441,6 +513,15 @@ let currentKelasData = null;
 let editingRuangId   = null;
 let editingKelasId   = null;
 
+// Master data cache
+let masterSemesters  = [];
+let masterUnits      = [];
+let masterCourses    = [];
+let masterLecturers  = [];
+let masterCurriculums = [];
+let allRuang         = [];
+let allKelas         = [];
+
 // Bootstrap modals
 const mRuang  = new bootstrap.Modal('#modalRuang');
 const mKelas  = new bootstrap.Modal('#modalKelas');
@@ -448,20 +529,106 @@ const mDosen  = new bootstrap.Modal('#modalDosen');
 const mJadwal = new bootstrap.Modal('#modalJadwal');
 
 // ── Init ───────────────────────────────────────────────────────────────────
-if (token) {
-    document.getElementById('tokenInput').value = token;
-    document.getElementById('tokenStatus').textContent = 'Token aktif ✓';
-    document.getElementById('tokenStatus').className = 'small text-success';
+// Baca token dari URL jika dikirim oleh master service setelah login
+// Contoh redirect dari master: http://<host>:8000/?token=<jwt>
+const urlParams = new URLSearchParams(window.location.search);
+const urlToken  = urlParams.get('token');
+if (urlToken) {
+    token = urlToken;
+    localStorage.setItem('jwt_token', token);
+    // Bersihkan token dari URL agar tidak terlihat di address bar
+    window.history.replaceState({}, document.title, window.location.pathname);
+    showToast('Login berhasil via Master Service ✓', 'success');
 }
+
+_applyTokenUI(token);
 loadRuang();
+if (token) loadMasterData();
+
+// ── Master Data ────────────────────────────────────────────────────────────
+
+function populateSelect(id, items, valueKey, labelFn, emptyLabel = '— pilih —') {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = `<option value="">${emptyLabel}</option>` +
+        items.map(item => `<option value="${item[valueKey]}">${esc(labelFn(item))}</option>`).join('');
+    if (cur) sel.value = cur;
+}
+
+async function loadMasterData() {
+    if (!token) return;
+    const [sems, units, courses, lecturers, curriculums, ruangList] = await Promise.all([
+        api('GET', '/penawaran/master/semesters'),
+        api('GET', '/penawaran/master/units'),
+        api('GET', '/penawaran/master/courses'),
+        api('GET', '/penawaran/master/lecturers'),
+        api('GET', '/penawaran/master/curriculums'),
+        api('GET', '/penawaran/ruang?status=tersedia'),
+    ]);
+    masterSemesters   = Array.isArray(sems)        ? sems        : [];
+    masterUnits       = Array.isArray(units)        ? units       : [];
+    masterCourses     = Array.isArray(courses)      ? courses     : [];
+    masterLecturers   = Array.isArray(lecturers)    ? lecturers   : [];
+    masterCurriculums = Array.isArray(curriculums)  ? curriculums : [];
+    allRuang          = Array.isArray(ruangList)    ? ruangList   : [];
+
+    // Populate filter selects
+    populateSelect('f-kelas-semester', masterSemesters, 'semester_id',
+        s => `${s.name || s.semester_id}${s.year ? ' ' + s.year : ''}`, 'Semua Semester');
+    populateSelect('f-kelas-unit', masterUnits, 'unit_id',
+        u => u.name || u.unit_id, 'Semua Unit');
+}
+
+async function refreshAllKelas() {
+    const data = await api('GET', '/penawaran/kelas');
+    allKelas = Array.isArray(data) ? data : [];
+    populateSelect('f-jadwal-kelas', allKelas, 'kelas_id',
+        k => `${k.kode_kelas} (ID ${k.kelas_id})`, 'Semua Kelas');
+}
+
+// Lookup helpers — return nama jika ada di cache, fallback ke ID
+function semesterLabel(id) {
+    const s = masterSemesters.find(x => String(x.semester_id) === String(id));
+    return s ? `${s.name || ''}${s.year ? ' ' + s.year : ''}`.trim() || id : id;
+}
+function courseLabel(id) {
+    const c = masterCourses.find(x => String(x.course_id) === String(id));
+    return c ? `${c.code ? c.code + ' — ' : ''}${c.name || id}` : id;
+}
+function unitLabel(id) {
+    const u = masterUnits.find(x => String(x.unit_id) === String(id));
+    return u ? u.name || id : id;
+}
+function lecturerLabel(id) {
+    const l = masterLecturers.find(x => String(x.lecturer_id) === String(id));
+    return l ? `${l.name || ''}${l.nip ? ' (NIP: ' + l.nip + ')' : ''}`.trim() || id : id;
+}
+function ruangLabel(id) {
+    const r = allRuang.find(x => String(x.ruang_id) === String(id));
+    return r ? `${r.kode_ruang} — ${r.nama_ruang || r.kode_ruang}` : id;
+}
 
 // ── Token ──────────────────────────────────────────────────────────────────
-function setToken() {
-    token = document.getElementById('tokenInput').value.trim();
-    localStorage.setItem('jwt_token', token);
+function _applyTokenUI(t) {
     const st = document.getElementById('tokenStatus');
-    st.textContent = token ? 'Token disimpan ✓' : 'Token dihapus';
-    st.className   = token ? 'small text-success' : 'small text-muted';
+    const btnLogout = document.getElementById('btnLogout');
+    if (t) {
+        st.textContent = 'Token aktif ✓';
+        st.className   = 'small text-success ms-2';
+        btnLogout.classList.remove('d-none');
+    } else {
+        st.textContent = '';
+        st.className   = 'small ms-2';
+        btnLogout.classList.add('d-none');
+    }
+}
+
+function doLogout() {
+    token = '';
+    localStorage.removeItem('jwt_token');
+    _applyTokenUI('');
+    showToast('Logout berhasil', 'secondary');
 }
 
 // ── API ────────────────────────────────────────────────────────────────────
@@ -496,12 +663,15 @@ function toast(msg, type = 'success') {
 
 // ── Tab navigation ─────────────────────────────────────────────────────────
 function switchTab(tab) {
-    document.getElementById('tab-ruang').style.display  = tab === 'ruang'  ? '' : 'none';
-    document.getElementById('tab-kelas').style.display  = tab === 'kelas'  ? '' : 'none';
+    document.getElementById('tab-ruang').style.display   = tab === 'ruang'   ? '' : 'none';
+    document.getElementById('tab-kelas').style.display   = tab === 'kelas'   ? '' : 'none';
+    document.getElementById('tab-jadwal').style.display  = tab === 'jadwal'  ? '' : 'none';
+    const tabs = ['ruang', 'kelas', 'jadwal'];
     document.querySelectorAll('#mainTabs .nav-link').forEach((el, i) => {
-        el.classList.toggle('active', (tab === 'ruang' && i === 0) || (tab === 'kelas' && i === 1));
+        el.classList.toggle('active', tabs[i] === tab);
     });
-    if (tab === 'ruang') loadRuang();
+    if (tab === 'ruang')  loadRuang();
+    if (tab === 'jadwal') refreshAllKelas();
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -622,12 +792,12 @@ async function loadKelas(reset = false) {
     tbody.innerHTML = data.map(k => `
         <tr>
             <td><strong>${esc(k.kode_kelas)}</strong></td>
-            <td>${k.course_id}</td>
-            <td>${k.semester_id}</td>
+            <td class="small">${esc(courseLabel(k.course_id))}</td>
+            <td class="small">${esc(semesterLabel(k.semester_id))}</td>
             <td>${k.kuota}</td>
             <td>${k.jumlah_terisi}</td>
             <td>${k.kuota - k.jumlah_terisi}</td>
-            <td>${k.ruang_ujian_id || '—'}</td>
+            <td class="small">${k.ruang_ujian_id ? esc(ruangLabel(k.ruang_ujian_id)) : '—'}</td>
             <td><span class="badge ${k.status === 'aktif' ? 'badge-aktif' : 'badge-nonaktif'}">${k.status}</span></td>
             <td>
                 <button class="btn btn-sm btn-primary btn-icon me-1" title="Lihat Detail"
@@ -651,18 +821,33 @@ async function loadKelas(reset = false) {
 function openKelasModal(kelas = null) {
     editingKelasId = kelas?.kelas_id || null;
     document.getElementById('modalKelasTitle').textContent = kelas ? 'Edit Kelas' : 'Tambah Kelas';
-    document.getElementById('k-kode').value        = kelas?.kode_kelas    || '';
-    document.getElementById('k-course').value      = kelas?.course_id     || '';
-    document.getElementById('k-semester').value    = kelas?.semester_id   || '';
-    document.getElementById('k-unit').value        = kelas?.unit_id       || '';
-    document.getElementById('k-kuota').value       = kelas?.kuota         ?? 30;
-    document.getElementById('k-ruang-ujian').value = kelas?.ruang_ujian_id || '';
-    document.getElementById('k-status').value      = kelas?.status        || 'aktif';
-    document.getElementById('k-kode').disabled     = !!kelas;
+    document.getElementById('k-kode').value  = kelas?.kode_kelas || '';
+    document.getElementById('k-kuota').value = kelas?.kuota ?? 30;
+    document.getElementById('k-status').value = kelas?.status || 'aktif';
+    document.getElementById('k-kode').disabled = !!kelas;
 
-    // hide course/semester/unit when editing (can't change)
-    ['k-course', 'k-semester', 'k-unit'].forEach(id => {
-        document.getElementById(id).closest('.col-4').style.display = kelas ? 'none' : '';
+    // Populate selects dari master data
+    populateSelect('k-course', masterCourses, 'course_id',
+        c => `${c.code ? c.code + ' — ' : ''}${c.name || c.course_id}`, '— pilih mata kuliah —');
+    populateSelect('k-semester', masterSemesters, 'semester_id',
+        s => `${s.name || s.semester_id}${s.year ? ' ' + s.year : ''}`, '— pilih semester —');
+    populateSelect('k-unit', masterUnits, 'unit_id',
+        u => u.name || u.unit_id, '— pilih unit —');
+    populateSelect('k-curriculum', masterCurriculums, 'curriculum_id',
+        c => `${c.name || c.curriculum_id}${c.year ? ' (' + c.year + ')' : ''}`, '— pilih kurikulum (opsional) —');
+    populateSelect('k-ruang-ujian', allRuang, 'ruang_id',
+        r => `${r.kode_ruang} — ${r.nama_ruang || ''}`, '— tidak ada —');
+
+    // Set nilai select setelah populate
+    document.getElementById('k-course').value      = kelas?.course_id      || '';
+    document.getElementById('k-semester').value    = kelas?.semester_id    || '';
+    document.getElementById('k-unit').value        = kelas?.unit_id        || '';
+    document.getElementById('k-curriculum').value  = kelas?.curriculum_id  || '';
+    document.getElementById('k-ruang-ujian').value = kelas?.ruang_ujian_id || '';
+
+    // Sembunyikan field yang tidak bisa diubah saat edit
+    ['k-course-group', 'k-semester-group', 'k-unit-group', 'k-curriculum-group'].forEach(id => {
+        document.getElementById(id).style.display = kelas ? 'none' : '';
     });
     mKelas.show();
 }
@@ -673,21 +858,24 @@ function openKelasModalFromDetail() {
 
 async function saveKelas() {
     const isEdit = !!editingKelasId;
+    const ruangUjianVal  = document.getElementById('k-ruang-ujian').value;
+    const curriculumVal  = document.getElementById('k-curriculum')?.value;
     const body = isEdit ? {
         kuota:          parseInt(document.getElementById('k-kuota').value) || 0,
-        ruang_ujian_id: parseInt(document.getElementById('k-ruang-ujian').value) || null,
+        ruang_ujian_id: ruangUjianVal ? parseInt(ruangUjianVal) : null,
         status:         document.getElementById('k-status').value,
     } : {
-        kode_kelas:    document.getElementById('k-kode').value.trim(),
-        course_id:     parseInt(document.getElementById('k-course').value),
-        semester_id:   parseInt(document.getElementById('k-semester').value),
-        unit_id:       parseInt(document.getElementById('k-unit').value),
-        kuota:         parseInt(document.getElementById('k-kuota').value) || 0,
-        ruang_ujian_id: parseInt(document.getElementById('k-ruang-ujian').value) || null,
+        kode_kelas:     document.getElementById('k-kode').value.trim(),
+        course_id:      parseInt(document.getElementById('k-course').value),
+        semester_id:    parseInt(document.getElementById('k-semester').value),
+        unit_id:        parseInt(document.getElementById('k-unit').value),
+        curriculum_id:  curriculumVal ? parseInt(curriculumVal) : null,
+        kuota:          parseInt(document.getElementById('k-kuota').value) || 0,
+        ruang_ujian_id: ruangUjianVal ? parseInt(ruangUjianVal) : null,
     };
 
     if (!isEdit && (!body.kode_kelas || !body.course_id || !body.semester_id || !body.unit_id)) {
-        toast('Kode, Course ID, Semester ID, dan Unit ID wajib diisi', 'error');
+        toast('Kode kelas, mata kuliah, semester, dan unit wajib dipilih', 'error');
         return;
     }
 
@@ -725,9 +913,10 @@ async function openKelasDetail(kelasId) {
     currentKelasData = kelas;
     document.getElementById('detail-kode').textContent = kelas.kode_kelas || '—';
     document.getElementById('detail-info').textContent =
-        `Course ID: ${kelas.course_id}  |  Semester ID: ${kelas.semester_id}  |  ` +
+        `${courseLabel(kelas.course_id)}  |  ${semesterLabel(kelas.semester_id)}  |  ` +
+        `Unit: ${unitLabel(kelas.unit_id)}  |  ` +
         `Kuota: ${kelas.kuota}  |  Terisi: ${kelas.jumlah_terisi}  |  ` +
-        `Ruang Ujian: ${kelas.ruang_ujian_id || '—'}  |  Status: ${kelas.status}`;
+        `Ruang Ujian: ${kelas.ruang_ujian_id ? ruangLabel(kelas.ruang_ujian_id) : '—'}  |  Status: ${kelas.status}`;
 
     await Promise.all([
         loadDosenByKelas(kelasId),
@@ -753,7 +942,7 @@ async function loadDosenByKelas(kelasId) {
     }
     tbody.innerHTML = data.map(d => `
         <tr>
-            <td>${d.lecturer_id}</td>
+            <td>${esc(lecturerLabel(d.lecturer_id))}</td>
             <td><span class="badge bg-secondary">${d.peran}</span></td>
             <td>
                 <button class="btn btn-sm btn-outline-danger btn-icon" onclick="removeDosen(${d.kelas_dosen_id})">
@@ -765,6 +954,8 @@ async function loadDosenByKelas(kelasId) {
 }
 
 function openDosenModal() {
+    populateSelect('d-lecturer-id', masterLecturers, 'lecturer_id',
+        l => `${l.name || l.lecturer_id}${l.nip ? ' — NIP: ' + l.nip : ''}`, '— pilih dosen —');
     document.getElementById('d-lecturer-id').value = '';
     document.getElementById('d-peran').value = 'pengampu';
     mDosen.show();
@@ -772,7 +963,7 @@ function openDosenModal() {
 
 async function saveDosen() {
     const lid = parseInt(document.getElementById('d-lecturer-id').value);
-    if (!lid) { toast('Lecturer ID wajib diisi', 'error'); return; }
+    if (!lid) { toast('Pilih dosen terlebih dahulu', 'error'); return; }
     const res = await api('POST', `/penawaran/kelas/${currentKelasId}/dosen`, {
         lecturer_id: lid,
         peran: document.getElementById('d-peran').value,
@@ -806,7 +997,7 @@ async function loadJadwalByKelas(kelasId) {
             <td><span class="badge ${tipeCls[j.tipe] || 'bg-secondary'}">${j.tipe.toUpperCase()}</span></td>
             <td>${esc(j.hari || j.tanggal || '—')}</td>
             <td class="text-nowrap">${j.jam_mulai?.slice(0,5)} – ${j.jam_selesai?.slice(0,5)}</td>
-            <td>${j.ruang_id || '—'}</td>
+            <td class="small">${j.ruang_id ? esc(ruangLabel(j.ruang_id)) : '—'}</td>
             <td>
                 ${j.is_outdated
                     ? '<span class="badge badge-nonaktif">Nonaktif</span>'
@@ -823,12 +1014,15 @@ async function loadJadwalByKelas(kelasId) {
 }
 
 function openJadwalModal() {
-    document.getElementById('j-tipe').value      = 'kuliah';
-    document.getElementById('j-hari').value      = '';
-    document.getElementById('j-tanggal').value   = '';
-    document.getElementById('j-jam-mulai').value = '';
+    populateSelect('j-ruang-id', allRuang, 'ruang_id',
+        r => `${r.kode_ruang} — ${r.nama_ruang || r.kode_ruang}${r.gedung ? ' (' + r.gedung + ')' : ''}`,
+        '— pilih ruang (opsional) —');
+    document.getElementById('j-tipe').value        = 'kuliah';
+    document.getElementById('j-hari').value        = '';
+    document.getElementById('j-tanggal').value     = '';
+    document.getElementById('j-jam-mulai').value   = '';
     document.getElementById('j-jam-selesai').value = '';
-    document.getElementById('j-ruang-id').value  = '';
+    document.getElementById('j-ruang-id').value    = '';
     toggleJadwalFields();
     mJadwal.show();
 }
@@ -872,6 +1066,87 @@ async function hapusJadwal(jadwal_id) {
     if (res?.status === 'error') { toast(res.message, 'error'); return; }
     toast('Jadwal dinonaktifkan');
     loadJadwalByKelas(currentKelasId);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// JADWAL TAB (semua jadwal)
+// ══════════════════════════════════════════════════════════════════════════
+
+async function loadJadwal(reset = false) {
+    const tbody = document.getElementById('jadwal-all-tbody');
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">Memuat...</td></tr>`;
+
+    const kelasId  = reset ? '' : document.getElementById('f-jadwal-kelas').value.trim();
+    const tipe     = reset ? '' : document.getElementById('f-jadwal-tipe').value;
+    const status   = reset ? '' : document.getElementById('f-jadwal-status').value;
+
+    if (reset) {
+        document.getElementById('f-jadwal-kelas').value  = '';
+        document.getElementById('f-jadwal-tipe').value   = '';
+        document.getElementById('f-jadwal-status').value = '';
+    }
+
+    let path = '/penawaran/jadwal?';
+    if (kelasId) path += `kelas_id=${encodeURIComponent(kelasId)}&`;
+    if (tipe)    path += `tipe=${encodeURIComponent(tipe)}&`;
+    if (status !== '') path += `is_outdated=${encodeURIComponent(status)}&`;
+
+    const data = await api('GET', path);
+
+    if (!Array.isArray(data)) {
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">${data?.message || 'Gagal memuat'}</td></tr>`;
+        document.getElementById('jadwal-count').textContent = '';
+        return;
+    }
+
+    document.getElementById('jadwal-count').textContent = data.length ? `${data.length} jadwal ditemukan` : '';
+
+    if (!data.length) {
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">Tidak ada jadwal ditemukan</td></tr>`;
+        return;
+    }
+
+    const tipeCls = { kuliah: 'bg-primary', uts: 'bg-warning text-dark', uas: 'bg-danger' };
+    tbody.innerHTML = data.map(j => `
+        <tr class="${j.is_outdated ? 'outdated-row' : ''}">
+            <td class="text-muted small">#${j.jadwal_id}</td>
+            <td>
+                <a href="#" onclick="goToKelasDetail(${j.kelas_id}); return false;"
+                   class="text-decoration-none fw-semibold small">
+                    ${esc(allKelas.find(k=>k.kelas_id===j.kelas_id)?.kode_kelas || String(j.kelas_id))}
+                </a>
+            </td>
+            <td><span class="badge ${tipeCls[j.tipe] || 'bg-secondary'}">${j.tipe.toUpperCase()}</span></td>
+            <td>${esc(j.hari || j.tanggal || '—')}</td>
+            <td class="text-nowrap">${j.jam_mulai?.slice(0,5)} – ${j.jam_selesai?.slice(0,5)}</td>
+            <td class="small">${j.ruang_id ? esc(ruangLabel(j.ruang_id)) : '—'}</td>
+            <td>
+                ${j.is_outdated
+                    ? '<span class="badge badge-nonaktif">Nonaktif</span>'
+                    : '<span class="badge badge-tersedia">Aktif</span>'}
+            </td>
+            <td>
+                ${!j.is_outdated ? `
+                <button class="btn btn-sm btn-outline-danger btn-icon" title="Nonaktifkan"
+                        onclick="hapusJadwalFromTab(${j.jadwal_id})">
+                    <i class="bi bi-dash-circle"></i>
+                </button>` : '—'}
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function hapusJadwalFromTab(jadwal_id) {
+    if (!confirm('Nonaktifkan jadwal ini?')) return;
+    const res = await api('DELETE', `/penawaran/jadwal/${jadwal_id}`);
+    if (res?.status === 'error') { showToast(res.message, 'danger'); return; }
+    showToast('Jadwal dinonaktifkan');
+    loadJadwal();
+}
+
+function goToKelasDetail(kelasId) {
+    switchTab('kelas');
+    openKelasDetail(kelasId);
 }
 
 // ── Utility ────────────────────────────────────────────────────────────────

@@ -13,10 +13,19 @@ class GatewayService:
 
     penawaran_kelas = RpcProxy("penawaran_kelas")
 
-    @http('GET', '/')
+    @http('GET', '/penawaran/ui')
     def ui(self, request):
         with open(_UI_PATH, 'r', encoding='utf-8') as f:
             return Response(f.read(), mimetype='text/html')
+
+    @http('POST', '/penawaran/login')
+    def login(self, request):
+        body = json.loads(request.get_data(as_text=True))
+        result = self.penawaran_kelas.master_login(
+            username=body.get('username'),
+            password=body.get('password'),
+        )
+        return Response(json.dumps(result), mimetype='application/json')
 
     def check_jwt(self, request):
         auth_header = request.headers.get('Authorization')
@@ -43,6 +52,45 @@ class GatewayService:
     def _err(self, message, status=400):
         return Response(json.dumps({"status": "error", "message": message}),
                         status=status, mimetype='application/json')
+
+    # ────────────────────────────────────────────
+    # MASTER DATA PROXY (untuk dropdown UI)
+    # ────────────────────────────────────────────
+
+    @http('GET', '/penawaran/master/semesters')
+    def proxy_semesters(self, request):
+        jwt_payload, error = self.check_jwt(request)
+        if error:
+            return self._ok(error, status=401)
+        return self._ok(self.penawaran_kelas.get_master_semesters())
+
+    @http('GET', '/penawaran/master/units')
+    def proxy_units(self, request):
+        jwt_payload, error = self.check_jwt(request)
+        if error:
+            return self._ok(error, status=401)
+        return self._ok(self.penawaran_kelas.get_master_units())
+
+    @http('GET', '/penawaran/master/courses')
+    def proxy_courses(self, request):
+        jwt_payload, error = self.check_jwt(request)
+        if error:
+            return self._ok(error, status=401)
+        return self._ok(self.penawaran_kelas.get_master_courses())
+
+    @http('GET', '/penawaran/master/lecturers')
+    def proxy_lecturers(self, request):
+        jwt_payload, error = self.check_jwt(request)
+        if error:
+            return self._ok(error, status=401)
+        return self._ok(self.penawaran_kelas.get_master_lecturers())
+
+    @http('GET', '/penawaran/master/curriculums')
+    def proxy_curriculums(self, request):
+        jwt_payload, error = self.check_jwt(request)
+        if error:
+            return self._ok(error, status=401)
+        return self._ok(self.penawaran_kelas.get_master_curriculums())
 
     # ────────────────────────────────────────────
     # RUANG
@@ -225,6 +273,27 @@ class GatewayService:
     # ────────────────────────────────────────────
     # JADWAL
     # ────────────────────────────────────────────
+
+    @http('GET', '/penawaran/jadwal')
+    def list_jadwal(self, request):
+        jwt_payload, error = self.check_jwt(request)
+        if error:
+            return self._ok(error, status=401)
+
+        kelas_id   = request.args.get('kelas_id')
+        tipe       = request.args.get('tipe')
+        is_outdated = request.args.get('is_outdated')
+
+        kwargs = {}
+        if kelas_id:
+            kwargs['kelas_id'] = int(kelas_id)
+        if tipe:
+            kwargs['tipe'] = tipe
+        if is_outdated is not None and is_outdated != '':
+            kwargs['is_outdated'] = is_outdated.lower() == 'true'
+
+        result = self.penawaran_kelas.list_jadwal(**kwargs)
+        return self._ok(result)
 
     @http('POST', '/penawaran/kelas/<int:kelas_id>/jadwal')
     def buat_jadwal(self, request, kelas_id):
