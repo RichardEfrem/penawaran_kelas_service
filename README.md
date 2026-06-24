@@ -135,14 +135,17 @@ Sistem autentikasi menggunakan JWT yang di-sign dengan secret key yang sama anta
 ### Alur autentikasi
 
 ```
-1. User login via POST /penawaran/login (lihat endpoint di bawah)
-   → service ini meneruskan ke master_service.login() via RPC
-   → dapat token JWT
+1. User login di Master Service (gateway utama)
+   → Master Service mengeluarkan token JWT
+   → Redirect ke http://<host>:8000/penawaran/ui?token=<jwt>
 
-2. Semua request berikutnya kirim token di header:
+2. Admin UI menangkap token dari URL, menyimpannya di localStorage,
+   lalu membersihkan URL agar token tidak terlihat di address bar.
+
+3. Semua request berikutnya kirim token di header:
    Authorization: Bearer <token>
 
-3. Gateway memverifikasi signature token menggunakan JWT_SECRET_KEY
+4. Gateway memverifikasi signature token menggunakan JWT_SECRET_KEY
    → jika valid, request dilanjutkan ke service
    → jika tidak valid, request ditolak dengan HTTP 401
 ```
@@ -207,9 +210,9 @@ Service ini menyertakan antarmuka admin berbasis web untuk mengelola Ruang, Kela
 
 ### Login
 
-Masukkan username dan password di form atas, klik **Login**. Token dari master service disimpan otomatis di `localStorage` — tidak perlu login ulang selama tab tidak ditutup.
+Login dilakukan **hanya melalui Master Service**. Setelah berhasil login di Master Service, browser akan diarahkan ke UI ini dengan token disisipkan di URL (`?token=<jwt>`). Token ditangkap otomatis, disimpan ke `localStorage`, lalu URL dibersihkan.
 
-Alternatif: paste JWT token langsung di kolom **Set Token**.
+Token tetap aktif selama tab tidak ditutup. Klik **Logout** untuk keluar.
 
 ---
 
@@ -226,7 +229,9 @@ Semua response bertipe `Content-Type: application/json`.
 
 ### `POST /penawaran/login` — Login via Master Service
 
-Endpoint proxy yang meneruskan kredensial ke `master_service.login()` dan mengembalikan token JWT. Token yang didapat dapat langsung digunakan untuk semua endpoint di service ini maupun service lain dalam sistem yang menggunakan secret key yang sama.
+Endpoint proxy yang meneruskan kredensial ke `master_service.login()` dan mengembalikan token JWT. Tersedia untuk penggunaan programatik (misalnya testing via curl/Postman).
+
+> Admin UI **tidak menggunakan endpoint ini** — login UI dilakukan melalui redirect dari Master Service.
 
 > Endpoint ini **tidak membutuhkan token** — digunakan justru untuk mendapatkan token.
 

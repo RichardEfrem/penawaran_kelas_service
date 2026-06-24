@@ -538,7 +538,7 @@ if (urlToken) {
     localStorage.setItem('jwt_token', token);
     // Bersihkan token dari URL agar tidak terlihat di address bar
     window.history.replaceState({}, document.title, window.location.pathname);
-    showToast('Login berhasil via Master Service ✓', 'success');
+    toast('Login berhasil via Master Service ✓', 'success');
 }
 
 _applyTokenUI(token);
@@ -628,7 +628,7 @@ function doLogout() {
     token = '';
     localStorage.removeItem('jwt_token');
     _applyTokenUI('');
-    showToast('Logout berhasil', 'secondary');
+    toast('Logout berhasil', 'secondary');
 }
 
 // ── API ────────────────────────────────────────────────────────────────────
@@ -1139,8 +1139,8 @@ async function loadJadwal(reset = false) {
 async function hapusJadwalFromTab(jadwal_id) {
     if (!confirm('Nonaktifkan jadwal ini?')) return;
     const res = await api('DELETE', `/penawaran/jadwal/${jadwal_id}`);
-    if (res?.status === 'error') { showToast(res.message, 'danger'); return; }
-    showToast('Jadwal dinonaktifkan');
+    if (res?.status === 'error') { toast(res.message, 'danger'); return; }
+    toast('Jadwal dinonaktifkan');
     loadJadwal();
 }
 
