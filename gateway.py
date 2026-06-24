@@ -1,11 +1,13 @@
 import json
 import os
+import mimetypes
 import jwt
 from nameko.web.handlers import http
 from nameko.rpc import RpcProxy
 from werkzeug.wrappers import Response
 
-_UI_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ui', 'index.html')
+_UI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ui')
+_UI_PATH = os.path.join(_UI_DIR, 'index.html')
 
 
 class GatewayService:
@@ -17,6 +19,19 @@ class GatewayService:
     def ui(self, request):
         with open(_UI_PATH, 'r', encoding='utf-8') as f:
             return Response(f.read(), mimetype='text/html')
+
+    @http('GET', '/penawaran/ui/<path:filename>')
+    def ui_static(self, request, filename):
+        # Serve aset statis UI (css/js). Cegah path traversal.
+        safe = os.path.normpath(filename)
+        if safe.startswith('..') or os.path.isabs(safe):
+            return Response('Forbidden', status=403)
+        full = os.path.join(_UI_DIR, safe)
+        if not os.path.isfile(full):
+            return Response('Not found', status=404)
+        mime = mimetypes.guess_type(full)[0] or 'application/octet-stream'
+        with open(full, 'r', encoding='utf-8') as f:
+            return Response(f.read(), mimetype=mime)
 
     @http('POST', '/penawaran/login')
     def login(self, request):
