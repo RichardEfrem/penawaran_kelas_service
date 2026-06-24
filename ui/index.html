@@ -74,6 +74,9 @@
 <!-- Token bar -->
 <div class="token-bar" id="loginBar">
     <span id="tokenStatus" class="small ms-2"></span>
+    <button id="btnLogin" class="btn btn-sm btn-primary ms-auto" onclick="openLoginModal()">
+        <i class="bi bi-box-arrow-in-right me-1"></i>Login
+    </button>
     <button id="btnLogout" class="btn btn-sm btn-outline-danger ms-auto d-none" onclick="doLogout()">Logout</button>
 </div>
 
@@ -291,6 +294,38 @@
         </div>
     </div>
 
+</div>
+
+<!-- ── MODAL: Ruang ─────────────────────────────────────────────────────── -->
+<!-- ── MODAL: Login ─────────────────────────────────────────────────────── -->
+<div class="modal fade" id="modalLogin" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-box-arrow-in-right me-2"></i>Login</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-3">
+                    Login diverifikasi oleh <strong>Master Service</strong>.
+                </p>
+                <div class="mb-3">
+                    <label class="form-label">Username <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="login-username" autocomplete="username"
+                           onkeydown="if(event.key==='Enter') doLogin()">
+                </div>
+                <div class="mb-1">
+                    <label class="form-label">Password <span class="text-danger">*</span></label>
+                    <input type="password" class="form-control" id="login-password" autocomplete="current-password"
+                           onkeydown="if(event.key==='Enter') doLogin()">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                <button class="btn btn-primary" id="btnDoLogin" onclick="doLogin()">Masuk</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- ── MODAL: Ruang ─────────────────────────────────────────────────────── -->
@@ -523,6 +558,7 @@ let allRuang         = [];
 let allKelas         = [];
 
 // Bootstrap modals
+const mLogin  = new bootstrap.Modal('#modalLogin');
 const mRuang  = new bootstrap.Modal('#modalRuang');
 const mKelas  = new bootstrap.Modal('#modalKelas');
 const mDosen  = new bootstrap.Modal('#modalDosen');
@@ -543,7 +579,11 @@ if (urlToken) {
 
 _applyTokenUI(token);
 loadRuang();
-if (token) loadMasterData();
+if (token) {
+    loadMasterData();
+} else {
+    openLoginModal();
+}
 
 // ── Master Data ────────────────────────────────────────────────────────────
 
@@ -574,10 +614,11 @@ async function loadMasterData() {
     allRuang          = Array.isArray(ruangList)    ? ruangList   : [];
 
     // Populate filter selects
-    populateSelect('f-kelas-semester', masterSemesters, 'semester_id',
-        s => `${s.name || s.semester_id}${s.year ? ' ' + s.year : ''}`, 'Semua Semester');
-    populateSelect('f-kelas-unit', masterUnits, 'unit_id',
-        u => u.name || u.unit_id, 'Semua Unit');
+    // NOTE: Master service mengembalikan key generik "id" (bukan semester_id/unit_id/dst)
+    populateSelect('f-kelas-semester', masterSemesters, 'id',
+        s => `${s.name || s.id}${s.year ? ' ' + s.year : ''}`, 'Semua Semester');
+    populateSelect('f-kelas-unit', masterUnits, 'id',
+        u => u.name || u.id, 'Semua Unit');
 }
 
 async function refreshAllKelas() {
@@ -588,20 +629,21 @@ async function refreshAllKelas() {
 }
 
 // Lookup helpers — return nama jika ada di cache, fallback ke ID
+// NOTE: data master memakai key "id", jadi cocokkan dengan x.id
 function semesterLabel(id) {
-    const s = masterSemesters.find(x => String(x.semester_id) === String(id));
+    const s = masterSemesters.find(x => String(x.id) === String(id));
     return s ? `${s.name || ''}${s.year ? ' ' + s.year : ''}`.trim() || id : id;
 }
 function courseLabel(id) {
-    const c = masterCourses.find(x => String(x.course_id) === String(id));
+    const c = masterCourses.find(x => String(x.id) === String(id));
     return c ? `${c.code ? c.code + ' — ' : ''}${c.name || id}` : id;
 }
 function unitLabel(id) {
-    const u = masterUnits.find(x => String(x.unit_id) === String(id));
+    const u = masterUnits.find(x => String(x.id) === String(id));
     return u ? u.name || id : id;
 }
 function lecturerLabel(id) {
-    const l = masterLecturers.find(x => String(x.lecturer_id) === String(id));
+    const l = masterLecturers.find(x => String(x.id) === String(id));
     return l ? `${l.name || ''}${l.nip ? ' (NIP: ' + l.nip + ')' : ''}`.trim() || id : id;
 }
 function ruangLabel(id) {
@@ -613,15 +655,73 @@ function ruangLabel(id) {
 function _applyTokenUI(t) {
     const st = document.getElementById('tokenStatus');
     const btnLogout = document.getElementById('btnLogout');
+    const btnLogin  = document.getElementById('btnLogin');
     if (t) {
         st.textContent = 'Token aktif ✓';
         st.className   = 'small text-success ms-2';
         btnLogout.classList.remove('d-none');
+        btnLogin.classList.add('d-none');
     } else {
-        st.textContent = '';
-        st.className   = 'small ms-2';
+        st.textContent = 'Belum login';
+        st.className   = 'small text-muted ms-2';
         btnLogout.classList.add('d-none');
+        btnLogin.classList.remove('d-none');
     }
+}
+
+function openLoginModal() {
+    document.getElementById('login-username').value = '';
+    document.getElementById('login-password').value = '';
+    mLogin.show();
+    setTimeout(() => document.getElementById('login-username').focus(), 300);
+}
+
+async function doLogin() {
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+    if (!username || !password) {
+        toast('Username dan password wajib diisi', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('btnDoLogin');
+    btn.disabled = true;
+    btn.textContent = 'Memproses...';
+
+    let res;
+    try {
+        // Tidak lewat api(): saat login belum ada token untuk header Authorization.
+        const r = await fetch('/penawaran/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
+        });
+        res = await r.json();
+    } catch (e) {
+        btn.disabled = false;
+        btn.textContent = 'Masuk';
+        toast('Gagal terhubung ke server: ' + e.message, 'error');
+        return;
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Masuk';
+
+    // Master service bisa mengembalikan token dalam beberapa bentuk — cek semuanya.
+    const t = res.token || res.access_token || res.jwt ||
+              (res.data && (res.data.token || res.data.access_token));
+    if (!t) {
+        toast(res.message || res.error || 'Login gagal — periksa username/password', 'error');
+        return;
+    }
+
+    token = t;
+    localStorage.setItem('jwt_token', token);
+    _applyTokenUI(token);
+    mLogin.hide();
+    toast('Login berhasil ✓', 'success');
+    loadMasterData();
+    loadRuang();
 }
 
 function doLogout() {
@@ -629,6 +729,7 @@ function doLogout() {
     localStorage.removeItem('jwt_token');
     _applyTokenUI('');
     toast('Logout berhasil', 'secondary');
+    openLoginModal();
 }
 
 // ── API ────────────────────────────────────────────────────────────────────
@@ -826,15 +927,15 @@ function openKelasModal(kelas = null) {
     document.getElementById('k-status').value = kelas?.status || 'aktif';
     document.getElementById('k-kode').disabled = !!kelas;
 
-    // Populate selects dari master data
-    populateSelect('k-course', masterCourses, 'course_id',
-        c => `${c.code ? c.code + ' — ' : ''}${c.name || c.course_id}`, '— pilih mata kuliah —');
-    populateSelect('k-semester', masterSemesters, 'semester_id',
-        s => `${s.name || s.semester_id}${s.year ? ' ' + s.year : ''}`, '— pilih semester —');
-    populateSelect('k-unit', masterUnits, 'unit_id',
-        u => u.name || u.unit_id, '— pilih unit —');
-    populateSelect('k-curriculum', masterCurriculums, 'curriculum_id',
-        c => `${c.name || c.curriculum_id}${c.year ? ' (' + c.year + ')' : ''}`, '— pilih kurikulum (opsional) —');
+    // Populate selects dari master data (key generik "id" dari master service)
+    populateSelect('k-course', masterCourses, 'id',
+        c => `${c.code ? c.code + ' — ' : ''}${c.name || c.id}`, '— pilih mata kuliah —');
+    populateSelect('k-semester', masterSemesters, 'id',
+        s => `${s.name || s.id}${s.year ? ' ' + s.year : ''}`, '— pilih semester —');
+    populateSelect('k-unit', masterUnits, 'id',
+        u => u.name || u.id, '— pilih unit —');
+    populateSelect('k-curriculum', masterCurriculums, 'id',
+        c => `${c.name || c.id}${c.year ? ' (' + c.year + ')' : ''}`, '— pilih kurikulum (opsional) —');
     populateSelect('k-ruang-ujian', allRuang, 'ruang_id',
         r => `${r.kode_ruang} — ${r.nama_ruang || ''}`, '— tidak ada —');
 
@@ -954,8 +1055,8 @@ async function loadDosenByKelas(kelasId) {
 }
 
 function openDosenModal() {
-    populateSelect('d-lecturer-id', masterLecturers, 'lecturer_id',
-        l => `${l.name || l.lecturer_id}${l.nip ? ' — NIP: ' + l.nip : ''}`, '— pilih dosen —');
+    populateSelect('d-lecturer-id', masterLecturers, 'id',
+        l => `${l.name || l.id}${l.nip ? ' — NIP: ' + l.nip : ''}`, '— pilih dosen —');
     document.getElementById('d-lecturer-id').value = '';
     document.getElementById('d-peran').value = 'pengampu';
     mDosen.show();

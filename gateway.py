@@ -53,6 +53,32 @@ class GatewayService:
         return Response(json.dumps({"status": "error", "message": message}),
                         status=status, mimetype='application/json')
 
+    # Role yang boleh mengelola penawaran kelas (create/update/delete).
+    # Dicocokkan case-insensitive supaya tahan beda kapitalisasi data Master
+    # (mis. "Kaprodi" vs "kaprodi"). Sesuaikan jika nama role di Master berbeda.
+    PENGELOLA_ROLES = ["admin", "kaprodi", "sekprodi"]
+
+    def _check_role(self, payload, allowed_types=None, allowed_roles=None):
+        """Authorization — batasi akses berdasarkan type (dosen/mahasiswa)
+        dan/atau roles yang ada di payload JWT. Pencocokan role case-insensitive.
+        Return (payload, None) jika diizinkan, atau (None, error_dict) jika ditolak.
+        Pola ini konsisten dengan master gateway & transkrip gateway."""
+        user_type  = payload.get("type", "")
+        user_roles = [str(r).lower() for r in payload.get("roles", [])]
+        if allowed_types and user_type not in allowed_types:
+            return None, {"status": "error",
+                          "message": f"Akses ditolak. Fitur ini hanya untuk {', '.join(allowed_types)}."}
+        if allowed_roles:
+            allowed_lower = [str(r).lower() for r in allowed_roles]
+            if not any(r in allowed_lower for r in user_roles):
+                return None, {"status": "error",
+                              "message": f"Akses ditolak. Butuh salah satu role: {', '.join(allowed_roles)}."}
+        return payload, None
+
+    # Hanya admin / kaprodi / sekprodi yang boleh mengubah data penawaran.
+    def _require_pengelola(self, payload):
+        return self._check_role(payload, allowed_roles=self.PENGELOLA_ROLES)
+
     # ────────────────────────────────────────────
     # MASTER DATA PROXY (untuk dropdown UI)
     # ────────────────────────────────────────────
@@ -101,6 +127,9 @@ class GatewayService:
         jwt_payload, error = self.check_jwt(request)
         if error:
             return self._ok(error, status=401)
+        _, role_error = self._require_pengelola(jwt_payload)
+        if role_error:
+            return self._ok(role_error, status=403)
 
         body = json.loads(request.get_data(as_text=True))
         result = self.penawaran_kelas.create_ruang(body)
@@ -136,6 +165,9 @@ class GatewayService:
         jwt_payload, error = self.check_jwt(request)
         if error:
             return self._ok(error, status=401)
+        _, role_error = self._require_pengelola(jwt_payload)
+        if role_error:
+            return self._ok(role_error, status=403)
 
         body = json.loads(request.get_data(as_text=True))
         result = self.penawaran_kelas.update_ruang(ruang_id, body)
@@ -148,6 +180,9 @@ class GatewayService:
         jwt_payload, error = self.check_jwt(request)
         if error:
             return self._ok(error, status=401)
+        _, role_error = self._require_pengelola(jwt_payload)
+        if role_error:
+            return self._ok(role_error, status=403)
 
         result = self.penawaran_kelas.hapus_ruang(ruang_id)
         if isinstance(result, dict) and result.get("error"):
@@ -163,6 +198,9 @@ class GatewayService:
         jwt_payload, error = self.check_jwt(request)
         if error:
             return self._ok(error, status=401)
+        _, role_error = self._require_pengelola(jwt_payload)
+        if role_error:
+            return self._ok(role_error, status=403)
 
         body = json.loads(request.get_data(as_text=True))
         result = self.penawaran_kelas.create_kelas(body)
@@ -212,6 +250,9 @@ class GatewayService:
         jwt_payload, error = self.check_jwt(request)
         if error:
             return self._ok(error, status=401)
+        _, role_error = self._require_pengelola(jwt_payload)
+        if role_error:
+            return self._ok(role_error, status=403)
 
         body = json.loads(request.get_data(as_text=True))
         result = self.penawaran_kelas.update_kelas(kelas_id, body)
@@ -224,6 +265,9 @@ class GatewayService:
         jwt_payload, error = self.check_jwt(request)
         if error:
             return self._ok(error, status=401)
+        _, role_error = self._require_pengelola(jwt_payload)
+        if role_error:
+            return self._ok(role_error, status=403)
 
         result = self.penawaran_kelas.nonaktifkan_kelas(kelas_id)
         if isinstance(result, dict) and result.get("error"):
@@ -239,6 +283,9 @@ class GatewayService:
         jwt_payload, error = self.check_jwt(request)
         if error:
             return self._ok(error, status=401)
+        _, role_error = self._require_pengelola(jwt_payload)
+        if role_error:
+            return self._ok(role_error, status=403)
 
         body = json.loads(request.get_data(as_text=True))
         result = self.penawaran_kelas.tambah_dosen(
@@ -264,6 +311,9 @@ class GatewayService:
         jwt_payload, error = self.check_jwt(request)
         if error:
             return self._ok(error, status=401)
+        _, role_error = self._require_pengelola(jwt_payload)
+        if role_error:
+            return self._ok(role_error, status=403)
 
         result = self.penawaran_kelas.remove_dosen(kelas_dosen_id)
         if isinstance(result, dict) and result.get("error"):
@@ -300,6 +350,9 @@ class GatewayService:
         jwt_payload, error = self.check_jwt(request)
         if error:
             return self._ok(error, status=401)
+        _, role_error = self._require_pengelola(jwt_payload)
+        if role_error:
+            return self._ok(role_error, status=403)
 
         body = json.loads(request.get_data(as_text=True))
         result = self.penawaran_kelas.buat_jadwal(kelas_id, body)
@@ -321,6 +374,9 @@ class GatewayService:
         jwt_payload, error = self.check_jwt(request)
         if error:
             return self._ok(error, status=401)
+        _, role_error = self._require_pengelola(jwt_payload)
+        if role_error:
+            return self._ok(role_error, status=403)
 
         result = self.penawaran_kelas.hapus_jadwal(jadwal_id)
         if isinstance(result, dict) and result.get("error"):
