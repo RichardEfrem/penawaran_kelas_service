@@ -1,7 +1,31 @@
+from datetime import datetime, time as _time, date as _date
+
 from nameko.rpc import rpc, RpcProxy
 from nameko_sqlalchemy import DatabaseSession
 
 from .models import Base, Kelas, KelasDosen, Ruang, Jadwal
+
+
+def _to_time(v):
+    """Terima 'HH:MM' / 'HH:MM:SS' / datetime.time -> datetime.time (atau None)."""
+    if v in (None, ""):
+        return None
+    if isinstance(v, _time):
+        return v
+    parts = str(v).split(":")
+    h = int(parts[0])
+    m = int(parts[1]) if len(parts) > 1 else 0
+    s = int(parts[2]) if len(parts) > 2 else 0
+    return _time(h, m, s)
+
+
+def _to_date(v):
+    """Terima 'YYYY-MM-DD' / datetime.date -> datetime.date (atau None)."""
+    if v in (None, ""):
+        return None
+    if isinstance(v, _date) and not isinstance(v, datetime):
+        return v
+    return datetime.strptime(str(v)[:10], "%Y-%m-%d").date()
 
 
 class PenawaranKelasService:
@@ -232,51 +256,84 @@ class PenawaranKelasService:
     # ---------- D. Jadwal ----------
     @rpc
     def buat_jadwal(self, kelas_id, data):
-        if data.get("tipe") in ("uts", "uas") and not data.get("ruang_id"):
-            kelas = self.db.query(Kelas).get(kelas_id)
-            if kelas and kelas.ruang_ujian_id:
-                data["ruang_id"] = kelas.ruang_ujian_id
-        if data.get("ruang_id"):
-            if data.get("hari"):
-                bentrok = (
-                    self.db.query(Jadwal)
-                    .filter(
-                        Jadwal.ruang_id == data["ruang_id"],
-                        Jadwal.hari == data["hari"],
-                        Jadwal.is_outdated == False,
-                        Jadwal.jam_mulai < data["jam_selesai"],
-                        Jadwal.jam_selesai > data["jam_mulai"],
+        try:
+            tipe = data.get("tipe", "kuliah")
+
+            # Validasi field wajib
+            try:
+                jam_mulai = _to_time(data.get("jam_mulai"))
+                jam_selesai = _to_time(data.get("jam_selesai"))
+            except (ValueError, IndexError, TypeError):
+                return {"error": "Format jam tidak valid (gunakan HH:MM)"}
+            if jam_mulai is None or jam_selesai is None:
+                return {"error": "jam_mulai dan jam_selesai wajib diisi"}
+            if jam_selesai <= jam_mulai:
+                return {"error": "jam_selesai harus setelah jam_mulai"}
+
+            try:
+                tanggal = _to_date(data.get("tanggal"))
+            except (ValueError, TypeError):
+                return {"error": "Format tanggal tidak valid (gunakan YYYY-MM-DD)"}
+
+            hari = data.get("hari") or None
+            if tipe == "kuliah" and not hari:
+                return {"error": "hari wajib diisi untuk jadwal kuliah"}
+            if tipe in ("uts", "uas") and not tanggal:
+                return {"error": "tanggal wajib diisi untuk UTS/UAS"}
+
+            # UTS/UAS tanpa ruang -> pakai ruang ujian kelas (jika ada)
+            ruang_id = data.get("ruang_id") or None
+            if tipe in ("uts", "uas") and not ruang_id:
+                kelas = self.db.query(Kelas).get(kelas_id)
+                if kelas and kelas.ruang_ujian_id:
+                    ruang_id = kelas.ruang_ujian_id
+
+            # Cek bentrok ruang (hanya jika ruang diset)
+            if ruang_id:
+                if hari:
+                    bentrok = (
+                        self.db.query(Jadwal)
+                        .filter(
+                            Jadwal.ruang_id == ruang_id,
+                            Jadwal.hari == hari,
+                            Jadwal.is_outdated == False,
+                            Jadwal.jam_mulai < jam_selesai,
+                            Jadwal.jam_selesai > jam_mulai,
+                        )
+                        .first()
                     )
-                    .first()
-                )
-                if bentrok:
-                    return {"error": "ruang bentrok pada jam tersebut"}
-            if data.get("tanggal"):
-                bentrok = (
-                    self.db.query(Jadwal)
-                    .filter(
-                        Jadwal.ruang_id == data["ruang_id"],
-                        Jadwal.tanggal == data["tanggal"],
-                        Jadwal.is_outdated == False,
-                        Jadwal.jam_mulai < data["jam_selesai"],
-                        Jadwal.jam_selesai > data["jam_mulai"],
+                    if bentrok:
+                        return {"error": "ruang bentrok pada jam tersebut"}
+                if tanggal:
+                    bentrok = (
+                        self.db.query(Jadwal)
+                        .filter(
+                            Jadwal.ruang_id == ruang_id,
+                            Jadwal.tanggal == tanggal,
+                            Jadwal.is_outdated == False,
+                            Jadwal.jam_mulai < jam_selesai,
+                            Jadwal.jam_selesai > jam_mulai,
+                        )
+                        .first()
                     )
-                    .first()
-                )
-                if bentrok:
-                    return {"error": "ruang sudah dipakai pada tanggal dan jam tersebut"}
-        j = Jadwal(
-            kelas_id=kelas_id,
-            ruang_id=data.get("ruang_id"),
-            tipe=data.get("tipe", "kuliah"),
-            hari=data.get("hari"),
-            tanggal=data.get("tanggal"),
-            jam_mulai=data["jam_mulai"],
-            jam_selesai=data["jam_selesai"],
-        )
-        self.db.add(j)
-        self.db.commit()
-        return j.jadwal_id
+                    if bentrok:
+                        return {"error": "ruang sudah dipakai pada tanggal dan jam tersebut"}
+
+            j = Jadwal(
+                kelas_id=kelas_id,
+                ruang_id=ruang_id,
+                tipe=tipe,
+                hari=hari,
+                tanggal=tanggal,
+                jam_mulai=jam_mulai,
+                jam_selesai=jam_selesai,
+            )
+            self.db.add(j)
+            self.db.commit()
+            return j.jadwal_id
+        except Exception as e:
+            self.db.rollback()
+            return {"error": str(e)}
 
     @rpc
     def get_jadwal(self, kelas_id):
